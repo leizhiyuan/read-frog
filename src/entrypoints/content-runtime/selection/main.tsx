@@ -8,12 +8,10 @@ import ReactDOM from "react-dom/client"
 import { createShadowRootUi } from "#imports"
 import { ThemeProvider } from "@/components/providers/theme-provider"
 import { TooltipProvider } from "@/components/ui/base-ui/tooltip"
-import { disposeAnnotationController } from "@/utils/annotate"
 import { baseThemeModeAtom } from "@/utils/atoms/theme"
 import { getLocalConfig } from "@/utils/config/storage"
 import { APP_NAME } from "@/utils/constants/app"
 import { SELECTION_UI_CSS } from "@/utils/content-ui-css"
-import { primeGlossaryMatcher } from "@/utils/glossary/active-matcher"
 import { initI18n } from "@/utils/i18n"
 import { LocaleBoundary } from "@/utils/i18n/locale-boundary"
 import { registerBundledIcons } from "@/utils/iconify/bundled-icons"
@@ -29,7 +27,6 @@ import {
 import { queryClient } from "@/utils/tanstack-query"
 import { getLocalThemeMode } from "@/utils/theme"
 import App from "./app"
-import { setupExternalSelectionSource } from "./external-selection-source"
 
 function HydrateAtoms({
   initialValues,
@@ -76,7 +73,7 @@ async function mountSelectionUI(ctx: ContentScriptContext) {
                 <ThemeProvider container={wrapper}>
                   <TooltipProvider>
                     <LocaleBoundary>
-                      <App uiContainer={container} portalContainer={wrapper} />
+                      <App portalContainer={wrapper} />
                     </LocaleBoundary>
                   </TooltipProvider>
                 </ThemeProvider>
@@ -97,7 +94,7 @@ async function mountSelectionUI(ctx: ContentScriptContext) {
   ctx.onInvalidated(keepShadowHostRendered(ui.shadowHost))
 }
 
-// The selection toolbar. Runs inside the shared content runtime, which the
+// Input box translation. Runs inside the shared content runtime, which the
 // loader content script imports (see entrypoints/content-runtime).
 export async function runSelectionContent(ctx: ContentScriptContext) {
   // Prevent double injection (manifest-based + programmatic injection)
@@ -107,8 +104,6 @@ export async function runSelectionContent(ctx: ContentScriptContext) {
   ctx.onInvalidated(() => {
     window.__READ_FROG_SELECTION_INJECTED__ = false
     clearEffectiveSiteControlUrl()
-    // The glosses are this script's: the next one draws its own.
-    disposeAnnotationController()
   })
 
   // Check global site control
@@ -118,27 +113,6 @@ export async function runSelectionContent(ctx: ContentScriptContext) {
     window.__READ_FROG_SELECTION_INJECTED__ = false
     clearEffectiveSiteControlUrl()
     return
-  }
-
-  // Warm the glossary before any selection happens, so the translate path
-  // reads a compiled matcher instead of waiting on a message round trip.
-  // Terms are stored per target language, so the warm-up needs the configured
-  // one; a failure here costs nothing but the warm-up.
-  //
-  // Below the guards, not above them: this is the only message any content
-  // script sends at page load, and sending it on a site the user switched the
-  // extension off for — where the toolbar never mounts, so the matcher can
-  // never be read — is work they asked us not to do. `primeGlossaryMatcher`
-  // swallows its own failures, so no catch is needed here.
-  // `config?.` because `isSiteEnabled` tolerates a null config rather than
-  // narrowing it; `glossary` itself is always present once config is, since
-  // its schema carries a default.
-  if (config?.glossary.enabled) primeGlossaryMatcher(config.language.targetCode)
-
-  // Answer ebook bridge handshakes before the React UI finishes mounting
-  const cleanupExternalSelectionSource = setupExternalSelectionSource()
-  if (cleanupExternalSelectionSource) {
-    ctx.onInvalidated(cleanupExternalSelectionSource)
   }
 
   await initI18n(config?.uiLanguage)

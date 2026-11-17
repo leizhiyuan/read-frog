@@ -2,7 +2,7 @@
 // so it must stay free of imports: the loader is injected into every page.
 
 /** The parts of the content runtime, each formerly its own content script. */
-export const CONTENT_RUNTIME_PARTS = ["host", "selection", "side", "subtitles"] as const
+export const CONTENT_RUNTIME_PARTS = ["host", "selection", "subtitles"] as const
 
 export type ContentRuntimePart = (typeof CONTENT_RUNTIME_PARTS)[number]
 
@@ -13,7 +13,6 @@ export type ContentRuntimePart = (typeof CONTENT_RUNTIME_PARTS)[number]
 export const PAGE_CONTENT_PARTS = [
   "host",
   "selection",
-  "side",
 ] as const satisfies readonly ContentRuntimePart[]
 
 /** The script the manifest injects into every page and the background into iframes. */
@@ -29,7 +28,7 @@ export const CONTENT_RUNTIME_PARTS_WINDOW_KEY = "__READ_FROG_CONTENT_PARTS__" as
 /**
  * The parts this loader should run, taken so a later loader in the frame does
  * not run them again. An iframe whose parts an earlier loader already took
- * gets none: falling back to the page parts would mount the top-frame-only side UI.
+ * gets none: falling back to the page parts would mount top-frame-only UI.
  *
  * Read from the content script's global, where the background's setter wrote
  * them. In Firefox that is the extension's sandbox, not `window`.

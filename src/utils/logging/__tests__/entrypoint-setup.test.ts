@@ -8,16 +8,11 @@ import { describe, expect, it } from "vitest"
 
 const ENTRYPOINTS_DIR = path.resolve("src/entrypoints")
 
-const EXTENSION_PAGES = ["offscreen", "options", "popup", "sidepanel", "translation-hub"]
+const EXTENSION_PAGES = ["options", "popup"]
 
 // Bootstraps injected into a great many frames, kept as small as they can be.
 // They log nothing themselves; what they load sets up its own logging.
-const EXEMPT = new Set([
-  "loader.content.ts",
-  "subtitles-loader.content.ts",
-  "iframe-selection-trigger.content.ts",
-  "ebook-section.content.ts",
-])
+const EXEMPT = new Set(["loader.content.ts", "subtitles-loader.content.ts"])
 
 // WXT builds a folder only when it has an index file in it
 function isEntrypoint(name: string): boolean {

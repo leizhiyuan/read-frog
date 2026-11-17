@@ -8,7 +8,6 @@ import {
 } from "../shared"
 
 const PRODUCTION_REQUIRED_ENV = {
-  WXT_GOOGLE_CLIENT_ID: "test-google-client-id",
   WXT_POSTHOG_HOST: "https://us.i.posthog.com",
   WXT_POSTHOG_API_KEY: "phc_test",
 } as const
@@ -52,13 +51,11 @@ describe("extension env resolution", () => {
       resolveExtensionEnv({
         WXT_USE_LOCAL_PACKAGES: "true",
         WXT_API_URL: "https://preview-api.readfrog.app",
-        WXT_AUTH_COOKIE_DOMAINS: "preview.readfrog.app",
       }),
     ).toMatchObject({
       ...LOCAL_EXTENSION_ENV_DEFAULTS,
       WXT_USE_LOCAL_PACKAGES: "true",
       WXT_API_URL: "https://preview-api.readfrog.app",
-      WXT_AUTH_COOKIE_DOMAINS: "preview.readfrog.app",
     })
   })
 
@@ -77,19 +74,16 @@ describe("extension env resolution", () => {
 })
 
 describe("extension env parsing", () => {
-  it("accepts canonical urls, origins, and cookie domains", () => {
+  it("accepts canonical urls and origins", () => {
     expect(
       parseResolvedExtensionEnv({
         WXT_WEBSITE_URL: "https://www.readfrog.app",
         WXT_OFFICIAL_SITE_ORIGINS: "https://readfrog.app,https://www.readfrog.app",
-        WXT_AUTH_COOKIE_DOMAINS: "readfrog.app,localhost",
       }),
     ).toEqual({
       WXT_API_URL: PRODUCTION_EXTENSION_ENV_DEFAULTS.WXT_API_URL,
       WXT_WEBSITE_URL: "https://www.readfrog.app",
       WXT_OFFICIAL_SITE_ORIGINS: ["https://readfrog.app", "https://www.readfrog.app"],
-      WXT_AUTH_COOKIE_DOMAINS: ["readfrog.app", "localhost"],
-      WXT_GOOGLE_CLIENT_ID: undefined,
       WXT_POSTHOG_HOST: undefined,
       WXT_POSTHOG_API_KEY: undefined,
       WXT_POSTHOG_TEST_UUID: undefined,
@@ -119,14 +113,6 @@ describe("extension env parsing", () => {
     ).toThrowError("must be an origin without a trailing slash or path")
   })
 
-  it("rejects cookie domains with leading dots", () => {
-    expect(() =>
-      parseResolvedExtensionEnv({
-        WXT_AUTH_COOKIE_DOMAINS: ".readfrog.app,localhost",
-      }),
-    ).toThrowError("must not start with '.'")
-  })
-
   it("rejects comma-separated entries with spaces", () => {
     expect(() =>
       parseResolvedExtensionEnv({
@@ -135,11 +121,10 @@ describe("extension env parsing", () => {
     ).toThrowError("must not include leading or trailing whitespace")
   })
 
-  it("requires Google and PostHog env vars when PROD is true", () => {
+  it("requires PostHog env vars when PROD is true", () => {
     expect(() =>
       parseResolvedExtensionEnv(
         {
-          WXT_GOOGLE_CLIENT_ID: "test-google-client-id",
           WXT_POSTHOG_HOST: "https://us.i.posthog.com",
         },
         true,
@@ -147,7 +132,7 @@ describe("extension env parsing", () => {
     ).toThrowError("expected string, received undefined")
   })
 
-  it("accepts Google and PostHog env vars when PROD is true", () => {
+  it("accepts PostHog env vars when PROD is true", () => {
     expect(
       parseResolvedExtensionEnv(
         {
@@ -159,8 +144,6 @@ describe("extension env parsing", () => {
       WXT_API_URL: PRODUCTION_EXTENSION_ENV_DEFAULTS.WXT_API_URL,
       WXT_WEBSITE_URL: PRODUCTION_EXTENSION_ENV_DEFAULTS.WXT_WEBSITE_URL,
       WXT_OFFICIAL_SITE_ORIGINS: ["https://readfrog.app", "https://www.readfrog.app"],
-      WXT_AUTH_COOKIE_DOMAINS: ["readfrog.app"],
-      WXT_GOOGLE_CLIENT_ID: PRODUCTION_REQUIRED_ENV.WXT_GOOGLE_CLIENT_ID,
       WXT_POSTHOG_HOST: PRODUCTION_REQUIRED_ENV.WXT_POSTHOG_HOST,
       WXT_POSTHOG_API_KEY: PRODUCTION_REQUIRED_ENV.WXT_POSTHOG_API_KEY,
       WXT_POSTHOG_TEST_UUID: undefined,
@@ -168,7 +151,7 @@ describe("extension env parsing", () => {
     })
   })
 
-  it("lets production parsing skip only the required Google and PostHog env vars", () => {
+  it("lets production parsing skip only the required PostHog env vars", () => {
     expect(
       parseResolvedExtensionEnv(
         {
@@ -181,8 +164,6 @@ describe("extension env parsing", () => {
       WXT_API_URL: PRODUCTION_EXTENSION_ENV_DEFAULTS.WXT_API_URL,
       WXT_WEBSITE_URL: PRODUCTION_EXTENSION_ENV_DEFAULTS.WXT_WEBSITE_URL,
       WXT_OFFICIAL_SITE_ORIGINS: ["https://readfrog.app", "https://www.readfrog.app"],
-      WXT_AUTH_COOKIE_DOMAINS: ["readfrog.app"],
-      WXT_GOOGLE_CLIENT_ID: undefined,
       WXT_POSTHOG_HOST: undefined,
       WXT_POSTHOG_API_KEY: undefined,
       WXT_POSTHOG_TEST_UUID: undefined,

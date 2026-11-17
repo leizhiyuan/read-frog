@@ -14,9 +14,9 @@ describe("mergeWithArrayOverwrite", () => {
           autoTranslateLanguages: ["eng"],
         },
       },
-      floatingButton: {
-        ...DEFAULT_CONFIG.floatingButton,
-        disabledFloatingButtonPatterns: ["gmail.com"],
+      siteControl: {
+        ...DEFAULT_CONFIG.siteControl,
+        blacklistPatterns: ["gmail.com"],
       },
     }
 
@@ -29,8 +29,8 @@ describe("mergeWithArrayOverwrite", () => {
         },
         mode: "replace",
       },
-      floatingButton: {
-        disabledFloatingButtonPatterns: ["youtube.com"],
+      siteControl: {
+        blacklistPatterns: ["youtube.com"],
       },
     }
 
@@ -39,10 +39,10 @@ describe("mergeWithArrayOverwrite", () => {
     // Arrays should be completely replaced
     expect(result.pageTranslation.page.autoTranslatePatterns).toEqual(["new.com", "test.org"])
     expect(result.pageTranslation.page.autoTranslateLanguages).toEqual([])
-    expect(result.floatingButton.disabledFloatingButtonPatterns).toEqual(["youtube.com"])
+    expect(result.siteControl.blacklistPatterns).toEqual(["youtube.com"])
 
     expect(result.pageTranslation.mode).toBe("replace")
-    expect(result.floatingButton.enabled).toBe(true)
+    expect(result.siteControl.mode).toBe("blacklist")
 
     // Ensure immutability
     expect(result).not.toBe(config)

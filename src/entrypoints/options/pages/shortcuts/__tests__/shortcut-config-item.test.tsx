@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest"
 import { fakeBrowser } from "wxt/testing/fake-browser"
 import { configAtom } from "@/utils/atoms/config"
 import { CONFIG_STORAGE_KEY, DEFAULT_CONFIG } from "@/utils/constants/config"
-import { getActionShortcutId, getShortcutBindings } from "../shortcut-bindings"
+import { getShortcutBindings } from "../shortcut-bindings"
 import { ShortcutConfigItem } from "../shortcut-config-item"
 
 const toastAdd = vi.hoisted(() => vi.fn<(toast: unknown) => void>())
@@ -30,6 +30,7 @@ async function renderItem(
   config: Config,
   shortcut: string,
   onChange = vi.fn<(shortcut: string) => void>(),
+  id = "translation-mode-shortcut",
 ) {
   // The config atom reloads from storage once mounted.
   await fakeBrowser.storage.local.set({ [CONFIG_STORAGE_KEY]: config })
@@ -38,9 +39,9 @@ async function renderItem(
   render(
     <Provider store={store}>
       <ShortcutConfigItem
-        id="selection-speak-shortcut"
-        title="Speak"
-        description="Reads aloud"
+        id={id}
+        title="Mode"
+        description="Picks the mode"
         shortcut={shortcut}
         onChange={onChange}
       />
@@ -56,53 +57,14 @@ function record(keys: { key: string; altKey?: boolean; shiftKey?: boolean; code?
 }
 
 describe("shortcut bindings", () => {
-  it("lists every page shortcut and every action, built-in or custom", () => {
-    const config = structuredClone(DEFAULT_CONFIG)
-    config.selectionToolbar.customActions = [
-      {
-        id: "custom-1",
-        name: "Mine",
-        icon: "tabler:star",
-        providerId: "openai-default",
-        systemPrompt: "",
-        prompt: "",
-        outputSchema: [{ id: "f", name: "f", type: "string", description: "" }],
-      },
-    ]
-
-    const bindings = getShortcutBindings(config)
+  it("lists every page shortcut the extension listens for", () => {
+    const bindings = getShortcutBindings(structuredClone(DEFAULT_CONFIG))
 
     expect(bindings.map((binding) => binding.id)).toEqual([
       "page-translation-shortcut",
       "translation-mode-shortcut",
-      "selection-translation-shortcut",
-      "selection-speak-shortcut",
-      "selection-annotation-shortcut",
-      "selection-annotation-mode-shortcut",
       "subtitles-toggle-shortcut",
-      "translation-hub-shortcut",
-      getActionShortcutId("default-dictionary"),
-      getActionShortcutId("default-sentence-analysis"),
-      getActionShortcutId("default-improve-writing"),
-      getActionShortcutId("custom-1"),
     ])
-    expect(bindings.at(-1)?.shortcut).toBe("")
-  })
-
-  it("lists the hover translation shortcut only while hover translation uses it", () => {
-    const config = structuredClone(DEFAULT_CONFIG)
-    config.pageTranslation.node.shortcut = "Alt+Shift+K"
-    const paragraphBinding = (bindings: ReturnType<typeof getShortcutBindings>) =>
-      bindings.find((binding) => binding.id === "node-translation-shortcut")
-
-    expect(paragraphBinding(getShortcutBindings(config))).toBeUndefined()
-
-    config.pageTranslation.node.hotkey = "custom"
-    expect(paragraphBinding(getShortcutBindings(config))).toEqual({
-      id: "node-translation-shortcut",
-      title: "options.shortcuts.nodeTranslation.title",
-      shortcut: "Alt+Shift+K",
-    })
   })
 })
 
@@ -110,14 +72,14 @@ describe("ShortcutConfigItem", () => {
   it("turns down a key another shortcut has, naming that shortcut", async () => {
     const onChange = await renderItem(structuredClone(DEFAULT_CONFIG), "Alt+Shift+R")
 
-    record({ key: "t", altKey: true, code: "KeyT" })
+    record({ key: "e", altKey: true, code: "KeyE" })
 
     await waitFor(() => {
       expect(toastAdd).toHaveBeenCalledWith(
         expect.objectContaining({
           type: "error",
           title: expect.stringMatching(
-            /^options\.shortcuts\.taken:.+\|options\.shortcuts\.selectionTranslation\.title$/,
+            /^options\.shortcuts\.taken:.+\|options\.shortcuts\.pageTranslation\.title$/,
           ),
         }),
       )
@@ -138,12 +100,11 @@ describe("ShortcutConfigItem", () => {
 
   it("flags a clash saved before the check existed", async () => {
     const config = structuredClone(DEFAULT_CONFIG)
-    config.selectionToolbar.features.speak.shortcut = "Alt+Shift+D"
+    config.pageTranslation.page.shortcut = "Alt+Shift+D"
     await renderItem(config, "Alt+Shift+D")
 
-    // Named after the built-in Dictionary, whose key it is.
     expect(screen.getByText(/^options\.shortcuts\.clash:/)).toHaveTextContent(
-      "options.shortcuts.clash:options.selectionToolbar.customActions.templates.dictionary.name",
+      "options.shortcuts.clash:options.shortcuts.pageTranslation.title",
     )
   })
 })

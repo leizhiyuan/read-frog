@@ -1,11 +1,7 @@
-import type { PromptResolver } from "./api/ai"
 import type { Config } from "@/types/config/config"
-import type { ProviderConfig } from "@/types/config/provider"
+import type { TranslateProviderConfig } from "@/types/config/provider"
 import type { TranslationTextFormat } from "@/types/config/translate"
-import type { MatchedTerm } from "@/utils/glossary/types"
-import { LANGUAGE_ENGLISH_NAMES } from "@read-frog/definitions"
-import { isLLMProviderConfig, isNonAPIProvider, isPureAPIProvider } from "@/types/config/provider"
-import { aiTranslate } from "./api/ai"
+import { isNonAPIProvider, isPureAPIProvider } from "@/types/config/provider"
 import { deeplTranslate } from "./api/deepl"
 import { deeplxTranslate } from "./api/deeplx"
 import { googleTranslate } from "./api/google"
@@ -19,21 +15,14 @@ import { microsoftTranslate } from "./api/microsoft"
 import { prepareTranslationText } from "./text-preparation"
 import { normalizeTranslationOutput } from "./translation-output-normalization"
 
-export async function executeTranslate<TContext>(
+export async function executeTranslate(
   text: string,
   langConfig: Config["language"],
-  providerConfig: ProviderConfig,
-  promptResolver: PromptResolver<TContext>,
+  providerConfig: TranslateProviderConfig,
   options?: {
-    isBatch?: boolean
-    context?: TContext
     textFormat?: TranslationTextFormat
-    // Only Google needs protection: its translateHtml transport collapses
-    // "\n" as HTML whitespace. Microsoft preserves newlines in both textTypes
-    // (live-verified); LLM prompts already mandate format preservation.
     preserveLineBreaks?: boolean
     signal?: AbortSignal
-    glossaryTerms?: readonly MatchedTerm[]
   },
 ) {
   const preparedText = prepareTranslationText(text)
@@ -42,7 +31,7 @@ export async function executeTranslate<TContext>(
   }
 
   const { provider } = providerConfig
-  let translatedText = ""
+  let translatedText: string
 
   if (isNonAPIProvider(provider)) {
     const google = provider === "google-translate"
@@ -56,7 +45,7 @@ export async function executeTranslate<TContext>(
         preserveLineBreaks: options?.preserveLineBreaks,
         signal: options?.signal,
       })
-    } else if (provider === "microsoft-translate") {
+    } else {
       translatedText = await microsoftTranslate(preparedText, sourceLang, targetLang, {
         textFormat: options?.textFormat,
         signal: options?.signal,
@@ -69,23 +58,17 @@ export async function executeTranslate<TContext>(
         textFormat: options?.textFormat,
         signal: options?.signal,
       })
-    } else if (provider === "deepl") {
-      translatedText = await deeplTranslate(text, sourceCode, targetCode, providerConfig, {
-        textFormat: options?.textFormat,
-        signal: options?.signal,
-      })
+    } else {
+      translatedText = await deeplTranslate(
+        text,
+        sourceCode,
+        targetCode,
+        providerConfig as Extract<TranslateProviderConfig, { provider: "deepl" }>,
+        { textFormat: options?.textFormat, signal: options?.signal },
+      )
     }
-  } else if (isLLMProviderConfig(providerConfig)) {
-    const targetLangName = LANGUAGE_ENGLISH_NAMES[langConfig.targetCode]
-    translatedText = await aiTranslate(
-      preparedText,
-      targetLangName,
-      providerConfig,
-      promptResolver,
-      options,
-    )
   } else {
-    throw new Error(`Unknown provider: ${provider}`)
+    throw new Error(`Unknown provider: ${String(provider)}`)
   }
 
   return normalizeTranslationOutput(providerConfig, translatedText).trim()

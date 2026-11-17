@@ -4,12 +4,12 @@ import { AnchoredToastProvider } from "@/components/ui/base-ui/toast"
 import { ShadowWrapperContext } from "@/utils/react-shadow-host/create-shadow-host"
 import { subtitlesAnchoredToastManager } from "@/utils/subtitles/toast"
 import { subtitlesDisplayAtom, subtitlesShowContentAtom, subtitlesShowStateAtom } from "../atoms"
-import { WordLookupCard } from "../learning/word-lookup-card"
 import { StateMessage } from "./state-message"
 import { SubtitlesSettingsPanel } from "./subtitles-settings-panel"
 import { isMenuInControls } from "./subtitles-settings-panel/menu-placement"
 import { useSubtitlesUI } from "./subtitles-ui-context"
 import { SubtitlesView } from "./subtitles-view"
+import { useHoldPlayback } from "./use-hold-playback"
 import { useSubtitlesCustomCSS } from "./use-subtitles-custom-css"
 
 export function SubtitlesContainer() {
@@ -23,6 +23,7 @@ export function SubtitlesContainer() {
   const shadowWrapper = use(ShadowWrapperContext)
 
   useSubtitlesCustomCSS()
+  useHoldPlayback()
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-visible">
@@ -41,7 +42,6 @@ export function SubtitlesContainer() {
         </div>
       )}
 
-      <WordLookupCard />
       <AnchoredToastProvider
         toastManager={subtitlesAnchoredToastManager}
         portalProps={{ container: shadowWrapper }}

@@ -5,7 +5,7 @@ import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { SUBTITLES_BOX_CLASS, SUBTITLES_VIEW_CLASS } from "@/utils/constants/subtitles"
 import { cn } from "@/utils/styles/utils"
 import { displaySubtitleAtom } from "../atoms"
-import { subtitlesHoveredAtom } from "../learning/atoms"
+import { subtitlesHoveredAtom } from "./interaction-atoms"
 import { MainSubtitle, TranslationSubtitle } from "./subtitle-lines"
 import { useVerticalDrag } from "./use-vertical-drag"
 

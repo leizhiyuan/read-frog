@@ -4,11 +4,8 @@ import type {
   FeatureProviderAnalytics,
 } from "@/types/analytics"
 import type { ProviderConfig } from "@/types/config/provider"
-import type { SerializableProviderRef } from "@/utils/providers/provider-ref"
-import type { ResolvedProviderRef } from "@/utils/providers/provider-registry"
 import { ANALYTICS_PROVIDER } from "@/types/analytics"
-import { ALL_PROVIDER_TYPES, isLLMProvider, isLLMProviderConfig } from "@/types/config/provider"
-import { isBuiltInAiProviderId } from "@/utils/providers/provider-registry"
+import { ALL_PROVIDER_TYPES } from "@/types/config/provider"
 
 const VALID_BACKEND_KINDS = new Set<AnalyticsBackendKind>(["llm", "non_llm", "unknown"])
 const VALID_CANONICAL_PROVIDERS = new Set<string>(ALL_PROVIDER_TYPES)
@@ -18,16 +15,6 @@ export const UNKNOWN_FEATURE_PROVIDER: FeatureProviderAnalytics = {
   backend_kind: "unknown",
 }
 
-export const BUILT_IN_AI_FEATURE_PROVIDER: FeatureProviderAnalytics = {
-  provider: ANALYTICS_PROVIDER.BUILT_IN_AI,
-  backend_kind: "llm",
-}
-
-export const EDGE_TTS_FEATURE_PROVIDER: FeatureProviderAnalytics = {
-  provider: ANALYTICS_PROVIDER.EDGE_TTS,
-  backend_kind: "non_llm",
-}
-
 export function classifyProviderConfig(
   providerConfig: ProviderConfig | null | undefined,
 ): FeatureProviderAnalytics {
@@ -35,33 +22,12 @@ export function classifyProviderConfig(
 
   return {
     provider: providerConfig.provider,
-    backend_kind: isLLMProviderConfig(providerConfig) ? "llm" : "non_llm",
+    backend_kind: "non_llm",
   }
 }
 
-export function classifyResolvedProvider(
-  provider: ResolvedProviderRef | null | undefined,
-): FeatureProviderAnalytics {
-  if (!provider) return UNKNOWN_FEATURE_PROVIDER
-  if (provider.kind === "local") return classifyProviderConfig(provider.config)
-  if (isBuiltInAiProviderId(provider.id)) return BUILT_IN_AI_FEATURE_PROVIDER
-  return UNKNOWN_FEATURE_PROVIDER
-}
-
-/**
- * Same classification as `classifyResolvedProvider`, for a ref that has already
- * been serialized for transport. A serialized system ref keeps only its id, so
- * the branch that reads `config` is unreachable for it — which is why the two
- * cannot share an implementation.
- */
-export function classifySerializedProvider(
-  provider: SerializableProviderRef | null | undefined,
-): FeatureProviderAnalytics {
-  if (!provider) return UNKNOWN_FEATURE_PROVIDER
-  if (provider.kind === "local") return classifyProviderConfig(provider.config)
-  if (isBuiltInAiProviderId(provider.providerId)) return BUILT_IN_AI_FEATURE_PROVIDER
-  return UNKNOWN_FEATURE_PROVIDER
-}
+/** Every provider left is a direct translation API. */
+export const classifyResolvedProvider = classifyProviderConfig
 
 export function normalizeFeatureProviderAnalytics(
   provider: unknown,
@@ -77,19 +43,10 @@ export function normalizeFeatureProviderAnalytics(
   if (provider === ANALYTICS_PROVIDER.UNKNOWN && backendKind === "unknown") {
     return UNKNOWN_FEATURE_PROVIDER
   }
-  if (provider === ANALYTICS_PROVIDER.BUILT_IN_AI && backendKind === "llm") {
-    return BUILT_IN_AI_FEATURE_PROVIDER
-  }
-  if (provider === ANALYTICS_PROVIDER.EDGE_TTS && backendKind === "non_llm") {
-    return EDGE_TTS_FEATURE_PROVIDER
-  }
-  if (
-    VALID_CANONICAL_PROVIDERS.has(provider) &&
-    backendKind === (isLLMProvider(provider) ? "llm" : "non_llm")
-  ) {
+  if (VALID_CANONICAL_PROVIDERS.has(provider) && backendKind === "non_llm") {
     return {
       provider: provider as AnalyticsProvider,
-      backend_kind: backendKind as AnalyticsBackendKind,
+      backend_kind: "non_llm",
     }
   }
 

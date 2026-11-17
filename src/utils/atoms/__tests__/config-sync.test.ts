@@ -4,8 +4,9 @@ import type { Config } from "@/types/config/config"
 import { createStore } from "jotai"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
+import { DEFAULT_PROVIDER_CONFIG } from "@/utils/constants/providers"
 import { configAtom, writeConfigAtom } from "../config"
-import { patchActionConfigAtom, patchProviderConfigAtom } from "../entity-config"
+import { patchProviderConfigAtom } from "../provider-config"
 import { storageAdapter } from "../storage-adapter"
 
 const storage = vi.hoisted(() => ({ value: {} as Config, watchers: new Set<() => void>() }))
@@ -54,19 +55,15 @@ describe("config persistence and invalidation", () => {
   it("re-evaluates a pure updater against fresh storage and preserves unrelated changes", async () => {
     const store = mountStore()
     await tick()
-    const source = storage.value.providersConfig.find((provider) => provider.provider === "openai")!
-    storage.value.providersConfig = storage.value.providersConfig.map((provider) =>
-      provider.id === source.id
-        ? { ...provider, description: "external", headers: { old: "value" } }
-        : provider,
-    )
+    const source = structuredClone(DEFAULT_PROVIDER_CONFIG.deeplx)
+    storage.value.providersConfig = [...storage.value.providersConfig, source]
+    store.set(configAtom, structuredClone(storage.value))
     await store.set(patchProviderConfigAtom, {
       id: source.id,
-      changes: { name: "local", headers: undefined },
+      changes: { name: "local" },
     })
     const result = storage.value.providersConfig.find((provider) => provider.id === source.id)
-    expect(result).toMatchObject({ name: "local", description: "external" })
-    expect(result).toHaveProperty("headers", undefined)
+    expect(result).toMatchObject({ name: "local" })
     expect(store.get(configAtom)).toEqual(storage.value)
   })
 
@@ -74,7 +71,9 @@ describe("config persistence and invalidation", () => {
     const store = mountStore()
     await tick()
     vi.mocked(storageAdapter.set).mockRejectedValueOnce(new Error("failed write"))
-    const first = store.set(writeConfigAtom, { betaExperience: { enabled: true } })
+    const first = store.set(writeConfigAtom, {
+      siteControl: { ...DEFAULT_CONFIG.siteControl, mode: "whitelist" },
+    })
     const failure = first.catch((error: unknown) => error)
     const second = store.set(writeConfigAtom, { uiLanguage: "zh-CN" })
     expect(await failure).toEqual(new Error("failed write"))
@@ -128,86 +127,13 @@ describe("config persistence and invalidation", () => {
     expect(store.get(configAtom).uiLanguage).toBe("zh-CN")
   })
 
-  it("patches only the edited action fields without replacing siblings or order", async () => {
-    const action = {
-      id: "a",
-      name: "A",
-      icon: "tabler:sparkles",
-      providerId: "read-frog-free-ai",
-      systemPrompt: "",
-      prompt: "x",
-      outputSchema: [
-        {
-          id: "result",
-          name: "result",
-          type: "string" as const,
-          description: "Result",
-        },
-      ],
-    }
-    storage.value.selectionToolbar.customActions = [action, { ...action, id: "b", name: "B" }]
-    const store = mountStore()
-    await tick()
-    storage.value.selectionToolbar.customActions = [
-      { ...action, id: "b", name: "external B" },
-      { ...action, prompt: "external prompt" },
-    ]
-    await store.set(patchActionConfigAtom, { id: "a", changes: { name: "local A" } })
-    expect(storage.value.selectionToolbar.customActions.map(({ id }) => id)).toEqual(["b", "a"])
-    expect(storage.value.selectionToolbar.customActions[0]?.name).toBe("external B")
-    expect(storage.value.selectionToolbar.customActions[1]).toMatchObject({
-      name: "local A",
-      prompt: "external prompt",
-    })
-  })
-
-  it("removes a built-in action connection rather than deep-merging the old value back", async () => {
-    storage.value.selectionToolbar.builtInActions.dictionary.notebaseConnection = {
-      notebaseId: "table",
-      notebaseNameSnapshot: "Words",
-      connectedAccount: { id: "user", name: "Reader", email: "reader@example.com" },
-      mappings: [],
-    }
-    const store = mountStore()
-    await tick()
-    await store.set(patchActionConfigAtom, {
-      id: "default-dictionary",
-      changes: { notebaseConnection: undefined },
-    })
-    expect(
-      storage.value.selectionToolbar.builtInActions.dictionary.notebaseConnection,
-    ).toBeUndefined()
-  })
-
-  it("replaces a built-in action connection rather than merging its old skipped fields back", async () => {
-    const connection = {
-      notebaseId: "table",
-      notebaseNameSnapshot: "Words",
-      connectedAccount: { id: "user", name: "Reader", email: "reader@example.com" },
-      mappings: [],
-    }
-    storage.value.selectionToolbar.builtInActions.dictionary.notebaseConnection = {
-      ...connection,
-      skippedFieldIds: ["default-dictionary-phonetic"],
-    }
-    const store = mountStore()
-    await tick()
-    await store.set(patchActionConfigAtom, {
-      id: "default-dictionary",
-      changes: { notebaseConnection: { ...connection, notebaseId: "other-table" } },
-    })
-    expect(
-      storage.value.selectionToolbar.builtInActions.dictionary.notebaseConnection?.skippedFieldIds,
-    ).toBeUndefined()
-  })
-
   it("rejects an entity deleted before the queued update instead of recreating it", async () => {
     const store = mountStore()
     await tick()
-    const source = storage.value.providersConfig.find((provider) => provider.provider === "openai")!
-    storage.value.providersConfig = storage.value.providersConfig.filter(
-      (provider) => provider.id !== source.id,
-    )
+    const source = structuredClone(DEFAULT_PROVIDER_CONFIG.deeplx)
+    storage.value.providersConfig = [
+      ...storage.value.providersConfig.filter((provider) => provider.id !== source.id),
+    ]
     await expect(
       store.set(patchProviderConfigAtom, { id: source.id, changes: { name: "local" } }),
     ).rejects.toThrow("no longer exists")

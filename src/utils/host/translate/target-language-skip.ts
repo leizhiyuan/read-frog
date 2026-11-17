@@ -18,7 +18,7 @@ export async function shouldSkipAsTargetLanguage(text: string, config: Config): 
   if (!config.pageTranslation.page.enableTargetLanguageSkip) return false
   const prepared = prepareTranslationText(text)
   if (prepared.length < MIN_LENGTH_FOR_TARGET_LANG_DETECTION) return false
-  const detected = await detectLanguage(prepared, { enableLLM: false })
+  const detected = await detectLanguage(prepared)
   // Regions do not count: franc reads European Portuguese as `pt-BR`, and a
   // `pt-PT` reader needs neither translated.
   return detected !== null && isSameLanguage(detected, config.language.targetCode)

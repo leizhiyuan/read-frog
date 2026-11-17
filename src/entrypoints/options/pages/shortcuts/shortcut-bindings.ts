@@ -1,10 +1,4 @@
 import type { Config } from "@/types/config/config"
-import {
-  getAnnotationModeShortcut,
-  getAnnotationShortcut,
-  getSpeakShortcut,
-} from "@/utils/constants/selection"
-import { getSelectionToolbarActions } from "@/utils/custom-actions"
 import { i18n } from "@/utils/i18n"
 import { isSameShortcut } from "@/utils/shortcut"
 
@@ -15,18 +9,11 @@ export interface ShortcutBinding {
   shortcut: string
 }
 
-export function getActionShortcutId(actionId: string) {
-  return `action-shortcut-${actionId}`
-}
-
 /**
- * Every key combination Read Frog listens for on a page. They all hear the same keystrokes, so
- * two of them on one key would both run. Hover translation is in only while it uses a custom
- * shortcut: its other hotkeys are a single key or a long press, not a combination.
+ * Every key combination Read Frog listens for on a page. They all hear the same
+ * keystrokes, so two of them on one key would both run.
  */
 export function getShortcutBindings(config: Config): ShortcutBinding[] {
-  const { features } = config.selectionToolbar
-  const { node } = config.pageTranslation
   return [
     {
       id: "page-translation-shortcut",
@@ -39,49 +26,10 @@ export function getShortcutBindings(config: Config): ShortcutBinding[] {
       shortcut: config.pageTranslation.modeShortcut,
     },
     {
-      id: "selection-translation-shortcut",
-      title: i18n.t("options.shortcuts.selectionTranslation.title"),
-      shortcut: features.translate.shortcut,
-    },
-    {
-      id: "selection-speak-shortcut",
-      title: i18n.t("options.shortcuts.selectionSpeak.title"),
-      shortcut: getSpeakShortcut(features.speak),
-    },
-    {
-      id: "selection-annotation-shortcut",
-      title: i18n.t("options.shortcuts.selectionAnnotation.title"),
-      shortcut: getAnnotationShortcut(config.selectionToolbar.annotation),
-    },
-    {
-      id: "selection-annotation-mode-shortcut",
-      title: i18n.t("options.shortcuts.selectionAnnotationMode.title"),
-      shortcut: getAnnotationModeShortcut(config.selectionToolbar.annotation),
-    },
-    {
       id: "subtitles-toggle-shortcut",
       title: i18n.t("options.shortcuts.subtitlesToggle.title"),
       shortcut: config.videoSubtitles.toggleShortcut,
     },
-    ...(node.hotkey === "custom"
-      ? [
-          {
-            id: "node-translation-shortcut",
-            title: i18n.t("options.shortcuts.nodeTranslation.title"),
-            shortcut: node.shortcut,
-          },
-        ]
-      : []),
-    {
-      id: "translation-hub-shortcut",
-      title: i18n.t("options.shortcuts.translationHub.title"),
-      shortcut: config.translationHub.shortcut,
-    },
-    ...getSelectionToolbarActions(config.selectionToolbar).map((action) => ({
-      id: getActionShortcutId(action.id),
-      title: action.name,
-      shortcut: action.shortcut ?? "",
-    })),
   ]
 }
 

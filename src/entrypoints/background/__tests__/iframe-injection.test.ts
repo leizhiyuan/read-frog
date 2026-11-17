@@ -1,8 +1,6 @@
 import type { Config } from "@/types/config/config"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import { browser, storage } from "#imports"
-import { DEFAULT_CONFIG } from "@/utils/constants/config"
-import { getSelectionToolbarHiddenKey } from "@/utils/constants/storage-keys"
 import {
   CONTENT_LOADER_SCRIPT_FILE,
   CONTENT_RUNTIME_PARTS_WINDOW_KEY,
@@ -68,23 +66,15 @@ function createDetails(overrides: Partial<NavigationDetails> = {}): NavigationDe
 }
 
 function createConfig({
-  nodeTranslationEnabled = false,
   siteControl,
   siteRules,
   eagerIframeInjection = false,
 }: {
-  nodeTranslationEnabled?: boolean
   siteControl?: Config["siteControl"]
   siteRules?: Config["siteRules"]
   eagerIframeInjection?: boolean
 } = {}): Config {
   return {
-    selectionToolbar: DEFAULT_CONFIG.selectionToolbar,
-    translate: {
-      node: {
-        enabled: nodeTranslationEnabled,
-      },
-    },
     siteControl: siteControl ?? {
       mode: "blacklist",
       blacklistPatterns: [],
@@ -246,31 +236,10 @@ describe("setupIframeInjection", () => {
     expect(executeScriptMock).not.toHaveBeenCalled()
   })
 
-  it("gives no toolbar runtime to an iframe while the tab's toolbar is hidden until reload", async () => {
-    const { activateSelection } = await setupSubject()
-    getLocalConfigMock.mockResolvedValue(createConfig())
-    storageGetItemMock.mockImplementation(async (key: string) =>
-      key === getSelectionToolbarHiddenKey(currentTabId) ? true : { enabled: false },
-    )
-
-    expect(
-      await activateSelection({
-        sender: {
-          tab: { id: currentTabId },
-          frameId: 2,
-          documentId: "doc-1",
-          url: "https://example.com/frame",
-          origin: "https://example.com",
-        },
-      }),
-    ).toBe(false)
-    expect(executeScriptMock).not.toHaveBeenCalled()
-  })
-
   it("skips iframe injection when page translation and node translation are not enabled", async () => {
     const { onCompleted } = await setupSubject()
     storageGetItemMock.mockResolvedValue({ enabled: false })
-    getLocalConfigMock.mockResolvedValue(createConfig({ nodeTranslationEnabled: false }))
+    getLocalConfigMock.mockResolvedValue(createConfig())
 
     await onCompleted(createDetails())
 
@@ -281,7 +250,7 @@ describe("setupIframeInjection", () => {
   it("skips eager iframe injection when only node translation is enabled", async () => {
     const { onCompleted } = await setupSubject()
     storageGetItemMock.mockResolvedValue({ enabled: false })
-    getLocalConfigMock.mockResolvedValue(createConfig({ nodeTranslationEnabled: true }))
+    getLocalConfigMock.mockResolvedValue(createConfig())
 
     await onCompleted(createDetails())
 
@@ -292,7 +261,7 @@ describe("setupIframeInjection", () => {
   it("injects host content when page translation is enabled", async () => {
     const { onCompleted } = await setupSubject()
     storageGetItemMock.mockResolvedValue({ enabled: true })
-    getLocalConfigMock.mockResolvedValue(createConfig({ nodeTranslationEnabled: false }))
+    getLocalConfigMock.mockResolvedValue(createConfig())
 
     await onCompleted(createDetails())
 
@@ -315,9 +284,7 @@ describe("setupIframeInjection", () => {
   it("auto-injects host and selection content for rule-enabled iframes when page translation is disabled", async () => {
     const { onCompleted } = await setupSubject()
     storageGetItemMock.mockResolvedValue({ enabled: false })
-    getLocalConfigMock.mockResolvedValue(
-      createConfig({ nodeTranslationEnabled: false, eagerIframeInjection: true }),
-    )
+    getLocalConfigMock.mockResolvedValue(createConfig({ eagerIframeInjection: true }))
 
     await onCompleted(
       createDetails({
@@ -349,9 +316,7 @@ describe("setupIframeInjection", () => {
   it("auto-injects existing and late iframes for rule-enabled top pages", async () => {
     const { onCompleted } = await setupSubject()
     storageGetItemMock.mockResolvedValue({ enabled: false })
-    getLocalConfigMock.mockResolvedValue(
-      createConfig({ nodeTranslationEnabled: false, eagerIframeInjection: true }),
-    )
+    getLocalConfigMock.mockResolvedValue(createConfig({ eagerIframeInjection: true }))
     tabsGetMock.mockResolvedValue({ url: "https://reader.example/viewer" })
     getAllFramesMock.mockResolvedValue([
       createFrame(0, "https://reader.example/viewer", -1),
@@ -419,7 +384,6 @@ describe("setupIframeInjection", () => {
     storageGetItemMock.mockResolvedValue({ enabled: false })
     getLocalConfigMock.mockResolvedValue(
       createConfig({
-        nodeTranslationEnabled: false,
         eagerIframeInjection: true,
         siteControl: {
           mode: "blacklist",
@@ -610,7 +574,7 @@ describe("setupIframeInjection", () => {
   it("dedupes host and selection iframe injection independently", async () => {
     const { injectHostContentIntoTabIframes } = await import("../iframe-injection")
     storageGetItemMock.mockResolvedValue({ enabled: false })
-    getLocalConfigMock.mockResolvedValue(createConfig({ nodeTranslationEnabled: false }))
+    getLocalConfigMock.mockResolvedValue(createConfig())
     getAllFramesMock.mockResolvedValue([
       createFrame(0, "https://reader.example/viewer", -1),
       createFrame(2, "https://reader.example/content/article"),
@@ -795,7 +759,7 @@ describe("setupIframeInjection", () => {
     const { injectHostContentIntoCurrentTabIframesAfterNodeTranslation } =
       await import("../iframe-injection")
     storageGetItemMock.mockResolvedValue({ enabled: false })
-    getLocalConfigMock.mockResolvedValue(createConfig({ nodeTranslationEnabled: true }))
+    getLocalConfigMock.mockResolvedValue(createConfig())
     getAllFramesMock.mockResolvedValue([
       createFrame(0, "https://example.com/app", -1),
       createFrame(2, "https://example.com/frame-a"),
@@ -847,7 +811,6 @@ describe("setupIframeInjection", () => {
       await import("../iframe-injection")
     getLocalConfigMock.mockResolvedValue(
       createConfig({
-        nodeTranslationEnabled: true,
         siteControl: {
           mode: "blacklist",
           blacklistPatterns: ["example.com"],
@@ -866,7 +829,7 @@ describe("setupIframeInjection", () => {
     const { injectHostContentIntoCurrentTabIframesAfterNodeTranslation } =
       await import("../iframe-injection")
     storageGetItemMock.mockResolvedValue({ enabled: false })
-    getLocalConfigMock.mockResolvedValue(createConfig({ nodeTranslationEnabled: true }))
+    getLocalConfigMock.mockResolvedValue(createConfig())
 
     await injectHostContentIntoCurrentTabIframesAfterNodeTranslation(currentTabId)
     executeScriptMock.mockClear()

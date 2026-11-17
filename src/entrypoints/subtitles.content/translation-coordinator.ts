@@ -1,4 +1,3 @@
-import type { SegmentationPipeline } from "./segmentation-pipeline"
 import type { SubtitlesVideoContext } from "@/utils/subtitles/processor/translator"
 import type { SubtitlesFragment, SubtitlesState } from "@/utils/subtitles/types"
 import { getLocalConfig } from "@/utils/config/storage"
@@ -11,7 +10,6 @@ export interface TranslationCoordinatorOptions {
   getFragments: () => SubtitlesFragment[]
   getVideoElement: () => HTMLVideoElement | null
   getCurrentState: () => SubtitlesState
-  segmentationPipeline: SegmentationPipeline | null
   onTranslated: (fragments: SubtitlesFragment[]) => void
   onStateChange: (state: SubtitlesState, data?: Record<string, string>) => void
 }
@@ -38,7 +36,6 @@ export class TranslationCoordinator {
   private getFragments: () => SubtitlesFragment[]
   private getVideoElement: () => HTMLVideoElement | null
   private getCurrentState: () => SubtitlesState
-  private segmentationPipeline: SegmentationPipeline | null
   private onTranslated: (fragments: SubtitlesFragment[]) => void
   private onStateChange: (state: SubtitlesState, data?: Record<string, string>) => void
 
@@ -46,7 +43,6 @@ export class TranslationCoordinator {
     this.getFragments = options.getFragments
     this.getVideoElement = options.getVideoElement
     this.getCurrentState = options.getCurrentState
-    this.segmentationPipeline = options.segmentationPipeline
     this.onTranslated = options.onTranslated
     this.onStateChange = options.onStateChange
   }
@@ -62,10 +58,6 @@ export class TranslationCoordinator {
     this.active = true
     this.attachVideoListeners(video)
 
-    if (this.segmentationPipeline) {
-      this.segmentationPipeline.start()
-    }
-
     this.handleTranslationTick()
   }
 
@@ -77,7 +69,6 @@ export class TranslationCoordinator {
     this.isTranslating = false
     this.translatingStarts.clear()
     this.detachVideoListeners()
-    this.segmentationPipeline?.stop()
   }
 
   /** Kick a nearby pass without waiting for the next timeupdate (e.g. after an ad). */
@@ -103,9 +94,6 @@ export class TranslationCoordinator {
     if (this.listenersAttached) return
     video.addEventListener("timeupdate", this.handleTranslationTick)
     video.addEventListener("seeked", this.handleTranslationTick)
-    if (this.segmentationPipeline) {
-      video.addEventListener("seeked", this.handleSeek)
-    }
     this.listenersAttached = true
   }
 
@@ -115,7 +103,6 @@ export class TranslationCoordinator {
     if (video) {
       video.removeEventListener("timeupdate", this.handleTranslationTick)
       video.removeEventListener("seeked", this.handleTranslationTick)
-      video.removeEventListener("seeked", this.handleSeek)
     }
     this.listenersAttached = false
   }
@@ -175,14 +162,6 @@ export class TranslationCoordinator {
     if (this.getCurrentState() === "error") return
 
     this.updateLoadingStateAt(currentTimeMs, fragments)
-
-    if (
-      this.segmentationPipeline &&
-      !this.segmentationPipeline.isRunning &&
-      this.segmentationPipeline.hasUnprocessedChunks()
-    ) {
-      this.segmentationPipeline.restart()
-    }
 
     if (this.isTranslating) return
     void this.translateNearby(currentTimeMs)
@@ -336,9 +315,5 @@ export class TranslationCoordinator {
     }
     this.lastEmittedState = "idle"
     this.onStateChange("idle")
-  }
-
-  private handleSeek = () => {
-    this.segmentationPipeline?.restart()
   }
 }

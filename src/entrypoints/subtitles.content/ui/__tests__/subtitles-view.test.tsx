@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
 import { SUBTITLES_BOX_CLASS } from "@/utils/constants/subtitles"
 import { currentTimeMsAtom, sourceTrackAtom } from "../../atoms"
-import { subtitlesHoveredAtom } from "../../learning/atoms"
+import { subtitlesHoveredAtom } from "../interaction-atoms"
 import { SubtitlesView } from "../subtitles-view"
 
 vi.mock("@/utils/i18n", () => ({ i18n: { t: (key: string) => key } }))

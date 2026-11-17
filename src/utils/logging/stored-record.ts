@@ -5,14 +5,7 @@ import type { LogRecord } from "./logger"
  * background owns the local log: it is the one context that is always there to
  * write it, and the only one a content script can reach.
  */
-export const FORWARDING_LOG_CONTEXTS = [
-  "content",
-  "offscreen",
-  "options",
-  "popup",
-  "sidepanel",
-  "translation-hub",
-] as const
+export const FORWARDING_LOG_CONTEXTS = ["content", "options", "popup"] as const
 export type ForwardingLogContext = (typeof FORWARDING_LOG_CONTEXTS)[number]
 
 /** Where a record was logged. */

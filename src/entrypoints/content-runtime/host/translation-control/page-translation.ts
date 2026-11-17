@@ -2,7 +2,6 @@ import type { LanguageTag } from "@read-frog/definitions"
 import type { FeatureUsageContext } from "@/types/analytics"
 import type { Config } from "@/types/config/config"
 import debounce from "debounce"
-import { toastManager } from "@/components/ui/base-ui/toast"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
 import { classifyFailureReason } from "@/utils/analytics-failure-reason"
@@ -58,20 +57,12 @@ import { translateTextForPageTitle } from "@/utils/host/translate/translate-vari
 import {
   beginPageTranslationSession,
   endPageTranslationSession,
-  setPageTranslationSessionProviderRef,
 } from "@/utils/host/translate/translation-session"
 import { cleanupNodeSiteRuleCSSIfUnused } from "@/utils/host/translate/ui/node-site-rule-css"
 import { cancelSpinnerAnimation } from "@/utils/host/translate/ui/spinner"
 import { ensureSiteRuleCSS, removeSiteRuleCSS } from "@/utils/host/translate/ui/style-injector"
-import { getOrCreateWebPageContext } from "@/utils/host/translate/webpage-context"
 import { createLogger } from "@/utils/logging/logger"
 import { sendMessage } from "@/utils/message"
-import {
-  canResolvedProviderRefGenerateText,
-  checkProviderAvailability,
-  resolvePageTranslationProvider,
-  resolvePageTranslationProviderOrNull,
-} from "@/utils/providers/provider-ref"
 import { removeReactShadowHost } from "@/utils/react-shadow-host/create-shadow-host"
 import { isTranslationCancelledError } from "@/utils/request/cancellation"
 import { createWorkPacer } from "@/utils/scheduler"
@@ -377,7 +368,9 @@ export class PageTranslationManager implements IPageTranslationManager {
     }
     this.titleTranslationEnabled = config.pageTranslation.page.translateTitle
 
-    const requestedProviderConfig = resolvePageTranslationProviderOrNull(config)
+    const requestedProviderConfig = config.providersConfig.find(
+      (provider) => provider.id === config.pageTranslation.providerId,
+    )
     const providerAnalytics = classifyResolvedProvider(requestedProviderConfig)
     const startedUrl = window.location.href
     const configuredSourceCode = config.language.sourceCode
@@ -416,27 +409,7 @@ export class PageTranslationManager implements IPageTranslationManager {
     // explicit guard for type-safety and for malformed storage snapshots.
     if (!requestedProviderConfig) return
 
-    const availability = await checkProviderAvailability(requestedProviderConfig, "pageTranslation")
-    if (this.pendingStart !== startToken) {
-      return
-    }
-    if (!availability.available) {
-      toastManager.add({ type: "error", title: availability.message })
-      if (trackedContext) {
-        void trackFeatureUsed({
-          ...trackedContext,
-          ...providerAnalytics,
-          ...pageAnalytics(),
-          outcome: "failure",
-          failure_reason: "precheck",
-        })
-      }
-      return
-    }
-
     try {
-      const providerConfig = resolvePageTranslationProvider(config)
-
       // Activate before the notify round trip: once the flag is set, stop()
       // is authoritative for teardown, so a cancel arriving during any await
       // below tears the session down instead of racing a pending start. The
@@ -447,7 +420,6 @@ export class PageTranslationManager implements IPageTranslationManager {
       const sessionVersion = this.translationSessionVersion
 
       beginPageTranslationSession()
-      setPageTranslationSessionProviderRef(availability.providerRef)
 
       try {
         await sendMessage("setAndNotifyPageTranslationStateChangedByManager", {
@@ -472,19 +444,6 @@ export class PageTranslationManager implements IPageTranslationManager {
         void ensureSiteRuleCSS(document, siteRule.injectedCss)
       }
 
-      // Same predicate `getWebPagePromptContext` uses to decide whether it
-      // needs the context at all. Excluding system providers was right while
-      // hosted runs sent no context; now that they do, skipping the warm-up
-      // only moves the Defuddle full-document parse out of setup and into the
-      // first translation call, where it blocks the first visible paragraph
-      // and janks the main thread on a long page.
-      await this.primeDocumentTitleContext(
-        config.pageTranslation.enableAIContentAware &&
-          canResolvedProviderRefGenerateText(providerConfig),
-      )
-      if (this.translationSessionVersion !== sessionVersion) {
-        return
-      }
       // The live value, not the config read above: the switch may have been
       // flipped while this start was awaiting.
       if (this.titleTranslationEnabled) {
@@ -728,18 +687,6 @@ export class PageTranslationManager implements IPageTranslationManager {
 
   private shouldManageDocumentTitle(): boolean {
     return window === window.top
-  }
-
-  private async primeDocumentTitleContext(shouldPrimeWebPageContext: boolean): Promise<void> {
-    if (!this.shouldManageDocumentTitle() || !shouldPrimeWebPageContext) {
-      return
-    }
-
-    try {
-      await getOrCreateWebPageContext()
-    } catch (error) {
-      log.warn("Failed to prime webpage context before translating document title", { error })
-    }
   }
 
   private startDocumentTitleTracking(): void {

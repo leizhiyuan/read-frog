@@ -11,15 +11,8 @@ vi.mock("@/utils/i18n/resources", async () => ({
       translation: {
         noAPIKeyConfig: { warningWithLink: { page: "page" } },
         options: {
-          preference: {
-            config: { googleDrive: { unresolved: { progress: "Resolved {{0}}/{{1}} changes" } } },
-          },
-          selectionToolbar: {
-            customActions: {
-              templates: {
-                dictionary: { prompt: "Explain {{selection}} in {{targetLanguage}}." },
-              },
-            },
+          apiProviders: {
+            badges: { featureCount: "{{0}} features" },
           },
         },
       },
@@ -46,15 +39,7 @@ describe("i18n.t", () => {
   })
 
   it("fills positional substitutions in order", () => {
-    expect(i18n.t("options.preference.config.googleDrive.unresolved.progress", [2, 5])).toBe(
-      "Resolved 2/5 changes",
-    )
-  })
-
-  it("leaves prompt-template tokens untouched when called without substitutions", () => {
-    expect(i18n.t("options.selectionToolbar.customActions.templates.dictionary.prompt")).toBe(
-      "Explain {{selection}} in {{targetLanguage}}.",
-    )
+    expect(i18n.t("options.apiProviders.badges.featureCount", [2])).toBe("2 features")
   })
 
   it("returns an empty string for a key missing in every locale", () => {

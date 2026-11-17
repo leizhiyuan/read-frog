@@ -5,7 +5,6 @@ import type { Config } from "@/types/config/config"
 import type { TranslationTextFormat } from "@/types/config/translate"
 import type { TransNode } from "@/types/dom"
 import { createLogger } from "@/utils/logging/logger"
-import { resolvePageTranslationProvider } from "@/utils/providers/provider-ref"
 import { getOwnerDocument } from "../../dom/node"
 import { extractInlineAtomText, getInlineAtomSelector } from "../dom/inline-atoms"
 import { protectTranslationHtmlAttributes } from "../dom/translation-html-attributes"
@@ -110,11 +109,13 @@ async function acquireDeepLXHtmlAttributeProbe(providerKey: string): Promise<{
 }
 
 function getDeepLXHtmlAttributeProviderKey(config: Config): string | undefined {
-  const resolved = resolvePageTranslationProvider(config)
-  if (resolved.kind === "system" || resolved.config.provider !== "deeplx") {
+  const provider = config.providersConfig.find(
+    (item) => item.id === config.pageTranslation.providerId,
+  )
+  if (provider?.provider !== "deeplx") {
     return undefined
   }
-  return `${resolved.config.id}:${resolved.config.baseURL ?? ""}`
+  return `${provider.id}:${provider.baseURL ?? ""}`
 }
 
 export function getDisplayTranslation(

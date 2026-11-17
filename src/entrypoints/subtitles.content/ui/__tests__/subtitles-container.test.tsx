@@ -14,10 +14,11 @@ vi.mock("../../atoms", async () => {
     subtitlesShowStateAtom: atom(undefined),
   }
 })
-vi.mock("../../learning/word-lookup-card", () => ({ WordLookupCard: () => null }))
 vi.mock("../state-message", () => ({ StateMessage: () => null }))
 vi.mock("../subtitles-settings-panel", () => ({ SubtitlesSettingsPanel: () => null }))
-vi.mock("../subtitles-ui-context", () => ({ useSubtitlesUI: () => ({ embedded: false }) }))
+vi.mock("../subtitles-ui-context", () => ({
+  useSubtitlesUI: () => ({ embedded: false, getVideoElement: () => null }),
+}))
 vi.mock("../subtitles-view", () => ({ SubtitlesView: () => null }))
 vi.mock("../use-subtitles-custom-css", () => ({ useSubtitlesCustomCSS: () => {} }))
 

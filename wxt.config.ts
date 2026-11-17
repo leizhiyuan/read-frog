@@ -34,8 +34,6 @@ export default defineConfig({
   alias: useLocalPackages
     ? {
         "@read-frog/definitions": path.resolve(monorepoRoot, "packages/definitions/src"),
-        "@read-frog/api-contract": path.resolve(monorepoRoot, "packages/api-contract/src"),
-        "@read-frog/layout-engine": path.resolve(monorepoRoot, "packages/layout-engine/src"),
       }
     : {},
   manifest: ({ mode, browser }) => ({
@@ -47,23 +45,7 @@ export default defineConfig({
       (browser === "chrome" || browser === "edge") && {
         key: "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAw2KhiXO2vySZtPu5pNSbyKhYavh8Be7gXmCZt8aJf6tQ/L3JK0qzL+3JSc/o20td3Jw+B2Dcw+EI93NAZr24xKnTNXQiJpuIuHb8xLXD0Ra/HrTVi4TJIhPdESogoG4uL6CD/F3TxfZJ2trX4Bt9cdAw1RGGeU+xU0g+YFfEka4ZUCpFAmTEw9H3/DU+nCp8yGaJWyiVgCTcFe38GZKEPt0iMJkTw956wz/iiafLx0pNG/RaztG9cAPoQOD2+SMFaeQ+b/G4OG17TYhzb09AhNBl6zSJ3jTKHSwuedCFwCce8Q/EchJfQZv71mjAE97bzwvkDYPCLj31Z5FE8HntMwIDAQAB",
       }),
-    permissions: [
-      "storage",
-      // The glossary is the only user-authored, non-regenerable data the
-      // extension stores locally. Without this, IndexedDB is "best-effort" and
-      // the browser may evict it under disk pressure — fine for the translation
-      // caches, data loss for a term list the user typed by hand. It also lifts
-      // the 10 MB quota the 20,000-term cap would otherwise sit close to.
-      "unlimitedStorage",
-      "tabs",
-      "alarms",
-      "cookies",
-      "contextMenus",
-      "identity",
-      "scripting",
-      "webNavigation",
-      ...(browser !== "firefox" ? ["offscreen", "sidePanel"] : []),
-    ],
+    permissions: ["storage", "tabs", "alarms", "scripting", "webNavigation"],
     host_permissions: [
       "*://*/*", // Required for scripting.executeScript in any frame
     ],
@@ -109,7 +91,7 @@ export default defineConfig({
     excludeSources: ["docs/**/*", "assets/**/*", "repos/**/*", "readmes/**/*"],
   },
   hooks: {
-    // With local packages the bundle holds @read-frog/layout-engine's readable
+    // With local packages the bundle holds @read-frog/definitions' readable
     // source, which must never leave this machine.
     "zip:start": () => {
       if (useLocalPackages) throw new Error("Do not zip a build made with local packages")
@@ -172,7 +154,7 @@ export default defineConfig({
         "@codemirror/search",
         "@codemirror/commands",
         "@lezer/common",
-        // @codemirror/lang-liquid's parser and highlighting share these with the other languages.
+        // The language parsers share these with each other.
         "@lezer/highlight",
         "@lezer/lr",
         ...(useLocalPackages ? LOCAL_PACKAGES_DEDUPE : []),

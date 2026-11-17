@@ -110,7 +110,7 @@ describe("google translate escape/decode round trip", () => {
     ["literal entity mentions survive intact", "write &amp; for ampersand"],
     ["apostrophes and quotes survive intact", `It's called "Read Frog"`],
   ])("%s", async (_name, text) => {
-    const result = await executeTranslate(text, langConfig, googleProviderConfig, vi.fn())
+    const result = await executeTranslate(text, langConfig, googleProviderConfig)
 
     expect(result).toBe(text)
   })
@@ -120,7 +120,6 @@ describe("google translate escape/decode round trip", () => {
       "- Organic\n- SEO\n- Paid Ads",
       langConfig,
       googleProviderConfig,
-      vi.fn(),
     )
 
     // The simulator also emulates the model eating the leading list dash —
@@ -145,7 +144,7 @@ describe("google translate escape/decode round trip", () => {
       "The first statement stands alone\nThe second makes a related point\nWhy? Because this line asks a question",
     ],
   ])("preserves %s with preserveLineBreaks", async (_name, text) => {
-    const result = await executeTranslate(text, langConfig, googleProviderConfig, vi.fn(), {
+    const result = await executeTranslate(text, langConfig, googleProviderConfig, {
       preserveLineBreaks: true,
     })
 
@@ -160,7 +159,6 @@ describe("google translate escape/decode round trip", () => {
       "- alpha\n\n  • beta",
       { ...langConfig, sourceCode: "auto" as const },
       googleProviderConfig,
-      vi.fn(),
       { preserveLineBreaks: true },
     )
 
@@ -172,7 +170,7 @@ describe("google translate escape/decode round trip", () => {
   })
 
   it("keeps a bullet-only line without doubling its dash", async () => {
-    const result = await executeTranslate("- \nhello", langConfig, googleProviderConfig, vi.fn(), {
+    const result = await executeTranslate("- \nhello", langConfig, googleProviderConfig, {
       preserveLineBreaks: true,
     })
 
@@ -182,12 +180,7 @@ describe("google translate escape/decode round trip", () => {
   const introductionBanner = `---[INTRODUCTION]${"-".repeat(61)}`
 
   it("keeps a lone banner's dashes (the simulator mangles any dashes it sees)", async () => {
-    const result = await executeTranslate(
-      introductionBanner,
-      langConfig,
-      googleProviderConfig,
-      vi.fn(),
-    )
+    const result = await executeTranslate(introductionBanner, langConfig, googleProviderConfig)
 
     expect(result).toBe(introductionBanner)
     const [payload] = JSON.parse(fetchMock.mock.calls.at(-1)![1].body)
@@ -201,7 +194,7 @@ describe("google translate escape/decode round trip", () => {
     ["dot leaders", "Controls ...... [CTRL]"],
     ["fill-in blanks", "Name: ________   Date: ____"],
   ])("keeps %s byte-for-byte", async (_name, text) => {
-    const result = await executeTranslate(text, langConfig, googleProviderConfig, vi.fn())
+    const result = await executeTranslate(text, langConfig, googleProviderConfig)
 
     expect(result).toBe(text)
   })
@@ -221,7 +214,7 @@ describe("google translate escape/decode round trip", () => {
       "- Talk to the old man --- he gives you a sword.",
     ].join("\n")
 
-    const result = await executeTranslate(guide, langConfig, googleProviderConfig, vi.fn(), {
+    const result = await executeTranslate(guide, langConfig, googleProviderConfig, {
       preserveLineBreaks: true,
     })
 
@@ -234,7 +227,6 @@ describe("google translate escape/decode round trip", () => {
       "• kept bullet\n- kept dash",
       langConfig,
       googleProviderConfig,
-      vi.fn(),
       {
         preserveLineBreaks: true,
       },

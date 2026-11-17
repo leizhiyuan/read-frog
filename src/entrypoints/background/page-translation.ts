@@ -1,13 +1,7 @@
-import type { WebPagePromptContext } from "@/types/content"
 import type TranslationCache from "@/utils/db/dexie/tables/translation-cache"
-import type { SerializableProviderRef } from "@/utils/providers/provider-ref"
 import { browser } from "#imports"
-import { isLLMProviderConfig } from "@/types/config/provider"
 import { normalizeLanguageConfig } from "@/utils/config/languages"
-import { isNoTranslationSentinel } from "@/utils/constants/prompt"
-import { cleanText } from "@/utils/content/utils"
 import { db } from "@/utils/db/dexie/db"
-import { Sha256Hex } from "@/utils/hash"
 import { executeTranslate } from "@/utils/host/translate/execute-translate"
 import {
   assertHtmlAttributeMarkerIntegrity,
@@ -18,21 +12,10 @@ import {
   auditInlineAtomTokens,
   hasInlineAtomTokens,
 } from "@/utils/host/translate/inline-atom-tokens"
-import { normalizePromptContextValue } from "@/utils/host/translate/translate-text"
-import { validateProviderHostedFeature } from "@/utils/hosted-ai/routing"
 import { createLogger } from "@/utils/logging/logger"
 import { onMessage } from "@/utils/message"
-import { getTranslatePrompt } from "@/utils/prompts/translate"
-import { canProviderRefGenerateText } from "@/utils/providers/provider-ref"
 import { TranslationCancelledError } from "@/utils/request/cancellation"
-import { getOrGenerateTranslationContextSummary } from "./translation-context-summary"
-import {
-  buildTranslationScopeKey,
-  createWebPageTranslationQueues,
-  getLocalProviderConfig,
-  getQueuedTranslationRouting,
-  shouldUseBatchQueue,
-} from "./translation-queues"
+import { buildTranslationScopeKey, createWebPageTranslationQueues } from "./translation-queues"
 
 const log = createLogger("background/page-translation")
 
@@ -57,41 +40,23 @@ async function getValidatedCachedTranslation(
   }
 }
 
-/** Which service answered, for the log; never its config, which holds the key. */
-function describeProvider(providerRef: SerializableProviderRef): Record<string, string | null> {
-  if (providerRef.kind === "system") {
-    return { provider: providerRef.providerId, modelTier: providerRef.modelTier }
-  }
-  const { config } = providerRef
-  if (!isLLMProviderConfig(config)) return { provider: config.provider }
-  const { model, isCustomModel, customModel } = config.model
-  return { provider: config.provider, model: isCustomModel ? customModel : model }
-}
-
 /** Register handlers synchronously while queue initialization runs in the background. */
 export function setupPageTranslationHandlers(): void {
   const { queuesPromise, cancelledScopes } = createWebPageTranslationQueues()
 
   onMessage("enqueueTranslateRequest", async (message) => {
-    const routing = getQueuedTranslationRouting(message.data)
-    const { requestQueue, batchQueue } = await queuesPromise
+    const requestQueue = await queuesPromise
     const {
       data: {
         text,
         langConfig: sentLangConfig,
-        providerRef,
+        providerConfig,
         scheduleAt,
         hash,
         textFormat,
         preserveLineBreaks,
-        webTitle,
-        webDescription,
-        webContent,
-        webSummary,
         sessionId,
         forceRetranslation = false,
-        glossaryTerms,
-        glossaryRevision,
       },
     } = message
     const langConfig = normalizeLanguageConfig(sentLangConfig)
@@ -108,88 +73,38 @@ export function setupPageTranslationHandlers(): void {
     if (hash && !forceRetranslation) {
       const cached = await getValidatedCachedTranslation(hash, text, validateHtmlAttributeMarkers)
       if (cached) {
-        // A "no translation needed" answer is cached like any other, so one
-        // wrong verdict keeps a paragraph untranslated until the entry expires.
-        // Debug only: it comes back on every visit, and the page's own summary
-        // already counts these paragraphs and quotes a few.
-        if (isNoTranslationSentinel(cached.translation)) {
-          log.debug("Served a cached no-translation verdict", { text, cachedAt: cached.createdAt })
-        }
         return cached.translation
       }
     }
 
     // The cache lookup above yielded — the session's cancel may have drained
     // the queues while this handler was suspended. Enqueueing now would park
-    // an undraininable task on a dead scope, so abort instead (the content
-    // side swallows this error).
+    // an undrainable task on a dead scope, so abort instead.
     if (scope && cancelledScopes.has(scope)) {
       throw new TranslationCancelledError(scope)
     }
 
-    let result: string
-    const context: WebPagePromptContext = {
-      webTitle: normalizePromptContextValue(webTitle),
-      webDescription: normalizePromptContextValue(webDescription),
-      webContent: normalizePromptContextValue(webContent),
-      webSummary: normalizePromptContextValue(webSummary),
-    }
-
-    if (shouldUseBatchQueue(providerRef)) {
-      const data = {
-        text,
-        langConfig,
-        ...routing,
-        hash,
-        scheduleAt,
-        context,
-        // Kept off `context`, which is part of the batch key — see
-        // `mergeBatchGlossaryTerms`.
-        glossaryTerms,
-        glossaryRevision,
-        scope,
-      }
-      result = await batchQueue.enqueue(data)
-    } else {
-      const localProvider = getLocalProviderConfig(providerRef)
-      if (!localProvider) {
-        throw new Error("Invalid local page translation provider")
-      }
-      // Create thunk based on type and params
-      const thunk = (signal?: AbortSignal) =>
-        executeTranslate(text, langConfig, localProvider, getTranslatePrompt, {
-          textFormat,
-          preserveLineBreaks,
-          signal,
-        })
-      result = await requestQueue.enqueue(thunk, scheduleAt, hash, scope ? [scope] : undefined)
-    }
+    const thunk = (signal?: AbortSignal) =>
+      executeTranslate(text, langConfig, providerConfig, {
+        textFormat,
+        preserveLineBreaks,
+        signal,
+      })
+    const result = await requestQueue.enqueue(thunk, scheduleAt, hash, scope ? [scope] : undefined)
 
     if (validateHtmlAttributeMarkers) {
       assertHtmlAttributeMarkerIntegrity(text, result)
     }
 
-    // Debug for the same reason as the cached verdict above: routine, once per paragraph.
-    if (isNoTranslationSentinel(result)) {
-      log.debug("The model found no translation needed", { text, ...describeProvider(providerRef) })
-    }
-
     // A response that dropped, invented or duplicated an inline-atom
-    // placeholder is still rendered by the content script (the formulas are
-    // appended) but must not be persisted: the next visit deserves a fresh
-    // attempt instead of a permanently degraded paragraph. The sentinel is
-    // exempt — "no translation needed" carries no placeholders by definition,
-    // and auditing it as a total loss would make every already-in-target-language
-    // paragraph containing a formula re-hit the provider on every page load.
+    // placeholder is still rendered by the content script but must not be
+    // persisted: the next visit deserves a fresh attempt.
     const inlineAtomTokensIntact =
-      !hasInlineAtomTokens(text) ||
-      isNoTranslationSentinel(result) ||
-      auditInlineAtomTokens(text, result).ok
+      !hasInlineAtomTokens(text) || auditInlineAtomTokens(text, result).ok
     if (result && !inlineAtomTokensIntact) {
       log.warn("Inline atom placeholders were not preserved; result not cached")
     }
 
-    // Cache the translation result if successful
     if (result && hash && inlineAtomTokensIntact) {
       await db.translationCache.put({
         key: hash,
@@ -201,49 +116,16 @@ export function setupPageTranslationHandlers(): void {
     return result
   })
 
-  onMessage("getOrGenerateWebPageSummary", async (message) => {
-    validateProviderHostedFeature(message.data.providerRef, message.data.hostedFeature)
-    const { requestQueue } = await queuesPromise
-    const { webTitle, webContent, providerRef } = message.data
-
-    if (!webTitle || !webContent) {
-      return null
-    }
-
-    // The payload type forces senders to narrow, but the wire is a trust
-    // boundary (a pre-update content script can send a translate-only ref).
-    // Refuse like the subtitle summary handlers do: a queue task for a
-    // provider with no model to prompt can only ever throw, after burning
-    // its retries.
-    if (!canProviderRefGenerateText(providerRef)) {
-      return null
-    }
-
-    return await getOrGenerateTranslationContextSummary({
-      ...message.data,
-      title: webTitle,
-      textContent: webContent,
-      cacheKeyParts: [webTitle, Sha256Hex(cleanText(webContent))],
-      requestQueue,
-    })
-  })
-
   onMessage("cancelPageTranslationRequests", async (message) => {
     const scope = buildTranslationScopeKey(message.sender, message.data.sessionId)
     if (!scope) return
     // Remember the scope BEFORE any await so enqueue handlers suspended on
     // the cache lookup refuse to enqueue after this drain.
     cancelledScopes.markScope(scope)
-    const { requestQueue, batchQueue } = await queuesPromise
-    // Batch queue first so pending batches cannot flush new request-queue
-    // tasks between the two drains.
-    const cancelledBatch = batchQueue.cancelByScope(scope)
+    const requestQueue = await queuesPromise
     const cancelledRequests = requestQueue.cancelByScope(scope)
-    if (cancelledBatch + cancelledRequests > 0) {
-      log.info("Cancelled page-translation requests", {
-        count: cancelledBatch + cancelledRequests,
-        scope,
-      })
+    if (cancelledRequests > 0) {
+      log.info("Cancelled page-translation requests", { count: cancelledRequests, scope })
     }
   })
 
@@ -252,8 +134,7 @@ export function setupPageTranslationHandlers(): void {
   browser.tabs.onRemoved.addListener((tabId) => {
     const prefix = `${tabId}:`
     cancelledScopes.markPrefix(prefix)
-    void queuesPromise.then(({ requestQueue, batchQueue }) => {
-      batchQueue.cancelWhere((scope) => scope.startsWith(prefix))
+    void queuesPromise.then((requestQueue) => {
       requestQueue.cancelWhere((scope) => scope.startsWith(prefix))
     })
   })

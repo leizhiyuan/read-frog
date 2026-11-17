@@ -3,7 +3,7 @@ import { act, render } from "@testing-library/react"
 import { createStore, Provider } from "jotai"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { DEFAULT_CONFIG } from "@/utils/constants/config"
-import { subtitlesHoveredAtom } from "../../learning/atoms"
+import { subtitlesHoveredAtom } from "../interaction-atoms"
 import { SubtitlesUIContext } from "../subtitles-ui-context"
 import { useVerticalDrag } from "../use-vertical-drag"
 

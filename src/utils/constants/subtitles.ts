@@ -230,7 +230,7 @@ export const SUBTITLE_CSS_PRESETS: Record<SubtitleCssPresetId, string> = {
 }
 
 // Subtitles source
-export const SUBTITLES_SOURCE = { NATIVE: "native", AI: "ai" } as const
+export const SUBTITLES_SOURCE = { NATIVE: "native" } as const
 export type SubtitlesSource = (typeof SUBTITLES_SOURCE)[keyof typeof SUBTITLES_SOURCE]
 
 // Brand names, so they stay the same in every UI language.

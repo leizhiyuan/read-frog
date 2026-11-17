@@ -1,6 +1,7 @@
 import type { LanguageTag } from "@read-frog/definitions"
 import { describe, expect, it } from "vitest"
-import { googleTranslate, microsoftTranslate } from "../../api"
+import { googleTranslate } from "../../api/google"
+import { microsoftTranslate } from "../../api/microsoft"
 import { toGoogleLanguageCode, toMicrosoftLanguageCode } from "../language-codes"
 
 const describeFreeApi = process.env.SKIP_FREE_API === "true" ? describe.skip : describe

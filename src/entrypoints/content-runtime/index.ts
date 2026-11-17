@@ -21,7 +21,6 @@ type RunPart = (ctx: ContentScriptContext) => Promise<void>
 const LOAD_PART: Record<ContentRuntimePart, () => Promise<RunPart>> = {
   host: async () => (await import("./host/main")).runHostContent,
   selection: async () => (await import("./selection/main")).runSelectionContent,
-  side: async () => (await import("./side/main")).runSideContent,
   subtitles: async () => (await import("./subtitles/main")).runSubtitlesContent,
 }
 

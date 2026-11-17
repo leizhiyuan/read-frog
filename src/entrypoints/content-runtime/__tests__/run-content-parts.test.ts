@@ -86,9 +86,8 @@ describe("runContentParts", () => {
     const runtime = await loadRuntime()
     mocks.runHost.mockRejectedValue(new Error("boom"))
 
-    await runtime.runContentParts(["host", "selection", "side"])
+    await runtime.runContentParts(["host", "selection"])
 
     expect(mocks.runSelection).toHaveBeenCalledTimes(1)
-    expect(mocks.runSide).toHaveBeenCalledTimes(1)
   })
 })

@@ -39,10 +39,7 @@ vi.mock("@/utils/analytics", () => ({
 }))
 vi.mock("@/utils/analytics-provider", () => ({
   UNKNOWN_FEATURE_PROVIDER: { provider: "unknown", backend_kind: "unknown" },
-  classifyResolvedProvider: () => ({ provider: "openai", backend_kind: "llm" }),
-}))
-vi.mock("@/utils/providers/provider-registry", () => ({
-  resolveProviderRefForCapability: () => ({}),
+  classifyProviderConfig: () => ({ provider: "microsoft-translate", backend_kind: "non_llm" }),
 }))
 
 function textarea(shadowDepth = 0) {

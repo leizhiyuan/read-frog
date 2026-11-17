@@ -10,12 +10,9 @@ import { createLogger } from "@/utils/logging/logger"
 import { onMessage, sendMessage } from "@/utils/message"
 import { clearEffectiveSiteControlUrl } from "@/utils/site-control"
 import { areSamePageTranslationOrigin } from "@/utils/url"
-import { bindTranslationHubShortcutKey } from "./bind-translation-hub-shortcut"
 import { setupUrlChangeListener } from "./listen"
-import { closePageDiagnosisPanel, togglePageDiagnosisPanel } from "./page-diagnosis"
 import { bindTranslationModeShortcutKey } from "./translation-control/bind-translation-mode-shortcut"
 import { bindTranslationShortcutKey } from "./translation-control/bind-translation-shortcut"
-import { registerNodeTranslationTriggers } from "./translation-control/node-translation"
 import { PageTranslationManager } from "./translation-control/page-translation"
 
 const log = createLogger("content-runtime/host/runtime")
@@ -29,8 +26,6 @@ export async function bootstrapHostContent(
   // No toast surface of its own: the selection UI renders the content
   // runtime's toasts (see content-runtime/selection/app.tsx).
   const cleanupUrlListener = setupUrlChangeListener()
-
-  const teardownNodeTranslation = registerNodeTranslationTriggers()
 
   const preloadConfig =
     initialConfig?.pageTranslation.page.preload ?? DEFAULT_CONFIG.pageTranslation.page.preload
@@ -64,8 +59,6 @@ export async function bootstrapHostContent(
   const cleanupTranslationShortcut = await bindTranslationShortcutKey(manager)
 
   const cleanupTranslationModeShortcut = await bindTranslationModeShortcutKey()
-
-  const cleanupTranslationHubShortcut = await bindTranslationHubShortcutKey()
 
   const detectAndReportPageLanguage = async (url: string) => {
     const generation = ++detectionGeneration
@@ -156,24 +149,15 @@ export async function bootstrapHostContent(
 
   // The popup sends this to the top frame only. Frames translate on their own and
   // keep their own verdicts, so the panel covers the top frame and says so.
-  const cleanupPageDiagnosisListener =
-    window === window.top
-      ? onMessage("togglePageTranslationDiagnostics", () => togglePageDiagnosisPanel())
-      : () => {}
-
   ctx.onInvalidated(() => {
     cleanupUrlListener()
-    teardownNodeTranslation()
     cleanupPageTranslationTriggers()
     cleanupTitleTranslationWatch()
     cleanupTranslationShortcut()
     cleanupTranslationModeShortcut()
-    cleanupTranslationHubShortcut()
     cleanupTranslationStateListener()
     cleanupFrameTranslationStateListener()
     cleanupDetectedLanguageRefreshListener()
-    cleanupPageDiagnosisListener()
-    closePageDiagnosisPanel()
     window.removeEventListener("extension:URLChange", handleExtensionUrlChange)
     window.__READ_FROG_HOST_INJECTED__ = false
     clearEffectiveSiteControlUrl()

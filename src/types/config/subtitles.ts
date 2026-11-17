@@ -1,6 +1,4 @@
 import { z } from "zod"
-import { BUILT_IN_DICTIONARY_ACTION_ID } from "@/utils/constants/custom-action"
-import { BUILT_IN_SUBTITLE_TRANSLATE_PROMPT_IDS } from "@/utils/constants/prompt"
 import {
   MAX_BACKGROUND_OPACITY,
   MAX_FONT_SCALE,
@@ -10,16 +8,7 @@ import {
   MIN_FONT_WEIGHT,
 } from "@/utils/constants/subtitles"
 import { shortcutSchema } from "./shortcut"
-import {
-  batchQueueConfigSchema,
-  createCustomPromptsConfigSchema,
-  MAX_CUSTOM_CSS_LENGTH,
-  requestQueueConfigSchema,
-} from "./translate"
-
-export const subtitleCustomPromptsConfigSchema = createCustomPromptsConfigSchema(
-  BUILT_IN_SUBTITLE_TRANSLATE_PROMPT_IDS,
-)
+import { MAX_CUSTOM_CSS_LENGTH, requestQueueConfigSchema } from "./translate"
 
 export const subtitlesDisplayModeSchema = z.enum(["bilingual", "originalOnly", "translationOnly"])
 export const subtitlesTranslationPositionSchema = z.enum(["above", "below"])
@@ -81,16 +70,10 @@ export const videoSubtitlesSchema = z.object({
   toggleShortcut: shortcutSchema,
   providerId: z.string().nonempty(),
   style: subtitlesStyleSchema,
-  aiSegmentation: z.boolean(),
-  // `.default()` is load-bearing: it lets configs stored before this field existed still
-  // parse during the upgrade window, before the v115 migration runs.
-  wordLookupActionId: z.string().nonempty().default(BUILT_IN_DICTIONARY_ACTION_ID),
   // Whether resting the pointer on the subtitles pauses the video. `.default()` is
   // load-bearing for the same reason as above, until the v117 migration runs.
   pauseOnHover: z.boolean().default(false),
   requestQueueConfig: requestQueueConfigSchema,
-  batchQueueConfig: batchQueueConfigSchema,
-  customPromptsConfig: subtitleCustomPromptsConfigSchema,
   position: subtitlePositionSchema,
 })
 

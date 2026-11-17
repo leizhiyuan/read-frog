@@ -1,18 +1,15 @@
 import type { LanguageTag } from "@read-frog/definitions"
 import { useAtomValue } from "jotai"
 import { useCallback, useEffect, useRef } from "react"
-import { toastManager } from "@/components/ui/base-ui/toast"
 import { ANALYTICS_FEATURE, ANALYTICS_SURFACE } from "@/types/analytics"
 import { createFeatureUsageContext, trackFeatureUsed } from "@/utils/analytics"
 import { classifyFailureReason } from "@/utils/analytics-failure-reason"
-import { classifyResolvedProvider, UNKNOWN_FEATURE_PROVIDER } from "@/utils/analytics-provider"
+import { classifyProviderConfig, UNKNOWN_FEATURE_PROVIDER } from "@/utils/analytics-provider"
 import { configFieldsAtomMap } from "@/utils/atoms/config"
 import { INPUT_REPLACE_REQUEST_TYPE } from "@/utils/constants/input-injector"
 import { getDeepActiveElement } from "@/utils/dom/active-element"
 import { translateTextForInput } from "@/utils/host/translate/translate-variants"
 import { createLogger } from "@/utils/logging/logger"
-import { HostedAiProviderUnavailableError } from "@/utils/providers/provider-ref"
-import { resolveProviderRefForCapability } from "@/utils/providers/provider-registry"
 
 const log = createLogger("selection/input-translation")
 
@@ -20,9 +17,6 @@ const SPACE_KEY = " "
 const TRIGGER_COUNT = 3
 const LAST_CYCLE_SWAPPED_KEY = "read-frog-input-translation-last-cycle-swapped"
 const SPINNER_ID = "read-frog-input-translation-spinner"
-/** Hammering the hotkey must stack one toast, not one per attempt. */
-const HOSTED_UNAVAILABLE_TOAST_ID = "input-translation-hosted-unavailable"
-
 function getLastCycleSwapped(): boolean {
   try {
     return sessionStorage.getItem(LAST_CYCLE_SWAPPED_KEY) === "true"
@@ -202,13 +196,8 @@ export function useInputTranslation() {
       let targetLanguage: LanguageTag | undefined
 
       try {
-        // Capability-resolved so Built-in AI is not reported as unknown.
-        providerAnalytics = classifyResolvedProvider(
-          resolveProviderRefForCapability(
-            "inputTranslation",
-            providersConfig,
-            inputTranslationConfig.providerId,
-          ),
+        providerAnalytics = classifyProviderConfig(
+          providersConfig.find((provider) => provider.id === inputTranslationConfig.providerId),
         )
         const translatedText = await translateTextForInput(text, fromLang, toLang, (resolved) => {
           targetLanguage = resolved
@@ -246,16 +235,6 @@ export function useInputTranslation() {
             target_language: targetLanguage,
             outcome: "failure",
             failure_reason: classifyFailureReason(error),
-          })
-        }
-        // A hosted plan/quota denial is a state the user can act on, not a
-        // defect: without this the spinner just appears and disappears and
-        // the feature reads as broken.
-        if (error instanceof HostedAiProviderUnavailableError) {
-          toastManager.add({
-            type: "error",
-            title: error.message,
-            id: HOSTED_UNAVAILABLE_TOAST_ID,
           })
         }
         log.error("Input translation failed", { error })

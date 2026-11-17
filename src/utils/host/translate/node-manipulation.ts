@@ -1,12 +1,3 @@
-import type { Config } from "@/types/config/config"
-import { getRandomUUID } from "@/utils/crypto-polyfill"
-import { getDocumentSiteRule } from "@/utils/site-rules/effective"
-import { isHTMLElement } from "../dom/filter"
-import { walkAndLabelElement } from "../dom/traversal"
-import { translateWalkedElement } from "./core/translation-walker"
-import { validateTranslationConfigAndToast } from "./translate-text"
-import { beginNodeSiteRuleCSSOperation } from "./ui/node-site-rule-css"
-
 // Re-export public APIs
 export {
   translateNodes,
@@ -15,41 +6,3 @@ export {
 } from "./core/translation-modes"
 export { translateWalkedElement } from "./core/translation-walker"
 export { removeAllTranslatedWrapperNodes } from "./dom/translation-cleanup"
-
-// High-level orchestration function
-export async function removeOrShowNodeTranslation(node: Element, config: Config): Promise<boolean> {
-  if (!isHTMLElement(node)) return false
-
-  const id = getRandomUUID()
-
-  if (
-    !validateTranslationConfigAndToast({
-      providersConfig: config.providersConfig,
-      pageTranslation: config.pageTranslation,
-      language: config.language,
-    })
-  ) {
-    return false
-  }
-
-  const rootNode = node.getRootNode()
-  const styleRoot = rootNode instanceof ShadowRoot ? rootNode : document
-  const siteRule = getDocumentSiteRule(config)
-  const releaseSiteRuleCSS = await beginNodeSiteRuleCSSOperation(styleRoot, siteRule.injectedCss)
-
-  try {
-    walkAndLabelElement(node, id, config)
-    await translateWalkedElement(
-      node,
-      id,
-      config,
-      true,
-      undefined,
-      undefined,
-      config.pageTranslation.node.forceRetranslation,
-    )
-  } finally {
-    await releaseSiteRuleCSS()
-  }
-  return true
-}

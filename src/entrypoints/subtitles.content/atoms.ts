@@ -72,8 +72,6 @@ export const subtitlesTranslateButtonAtom = atom<HTMLElement | null>(null)
 
 export const subtitlesSidebarOpenAtom = atom<boolean>(false)
 
-export const videoSummaryPartialAtom = atom<string>("")
-
 export const subtitlesSidebarActiveSectionAtom = atom<SectionId>(DEFAULT_SECTION_ID)
 
 export const TranslatedDownloadPhase = {

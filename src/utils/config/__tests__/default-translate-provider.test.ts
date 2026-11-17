@@ -19,7 +19,6 @@ vi.mock("../storage", () => ({
 function translateProviderIdsOf(config: Config) {
   return [
     config.pageTranslation.providerId,
-    config.selectionToolbar.features.translate.providerId,
     config.inputTranslation.providerId,
     config.videoSubtitles.providerId,
   ]
@@ -51,7 +50,6 @@ describe("selectFreshTranslateProviders", () => {
       GOOGLE_TRANSLATE_PROVIDER_ID,
       GOOGLE_TRANSLATE_PROVIDER_ID,
       GOOGLE_TRANSLATE_PROVIDER_ID,
-      GOOGLE_TRANSLATE_PROVIDER_ID,
     ])
   })
 
@@ -71,7 +69,6 @@ describe("selectFreshTranslateProviders", () => {
       "openai-default",
       GOOGLE_TRANSLATE_PROVIDER_ID,
       GOOGLE_TRANSLATE_PROVIDER_ID,
-      GOOGLE_TRANSLATE_PROVIDER_ID,
     ])
   })
 
@@ -79,7 +76,6 @@ describe("selectFreshTranslateProviders", () => {
     isGoogleTranslateReachableMock.mockResolvedValue(true)
     const config = structuredClone(DEFAULT_CONFIG)
     config.pageTranslation.providerId = "openai-default"
-    config.selectionToolbar.features.translate.providerId = "openai-default"
     config.inputTranslation.providerId = "openai-default"
     config.videoSubtitles.providerId = "openai-default"
     getLocalConfigAndMetaMock.mockResolvedValue({

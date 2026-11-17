@@ -1,30 +1,19 @@
 import type { LanguageTag } from "@read-frog/definitions"
 import type { ParagraphDiagnosis } from "./paragraph-diagnosis"
-import type { HostedAiTextStreamRoute } from "@/types/background-stream"
 import type { Config, InputTranslationLang } from "@/types/config/config"
 import type { TranslateProviderConfig } from "@/types/config/provider"
 import type { TranslationTextFormat } from "@/types/config/translate"
-import type { ResolvedProviderRef } from "@/utils/providers/provider-registry"
 import { getDetectedCodeFromStorage, getFinalSourceCode } from "@/utils/config/languages"
 import { createLogger } from "@/utils/logging/logger"
-import {
-  canResolvedProviderRefGenerateText,
-  HostedAiProviderUnavailableError,
-  resolvePageTranslationProvider,
-} from "@/utils/providers/provider-ref"
-import { resolveProviderRefForCapability } from "@/utils/providers/provider-registry"
 import { getLocalConfig } from "../../config/storage"
 import { shouldSkipAsTargetLanguage } from "./target-language-skip"
 import { prepareTranslationText } from "./text-preparation"
 import {
   MIN_LENGTH_FOR_SKIP_LANGUAGE_DETECTION,
-  resolvePageProviderRef,
   shouldSkipByLanguage,
   translateTextCore,
 } from "./translate-text"
 import { getPageTranslationSessionId } from "./translation-session"
-import { getOrCreateWebPageContext } from "./webpage-context"
-import { getOrGenerateWebPageSummary } from "./webpage-summary"
 
 const log = createLogger("host/translate/translate-variants")
 
@@ -36,57 +25,12 @@ async function getConfigOrThrow(): Promise<Config> {
   return config
 }
 
-async function getWebPagePromptContext(
-  providerConfig: ResolvedProviderRef<TranslateProviderConfig>,
-  enableAIContentAware: boolean,
-  includeSummary: boolean,
-  hostedFeature: HostedAiTextStreamRoute,
-): Promise<
-  { webTitle: string; webDescription?: string; webContent: string; webSummary?: string } | undefined
-> {
-  // Pure translate providers (Google, Microsoft, DeepLX) take no prompt
-  // context. Built-in AI does, and generates its summary hosted.
-  if (!canResolvedProviderRefGenerateText(providerConfig)) {
-    return undefined
+function getProviderOrThrow(config: Config, providerId: string): TranslateProviderConfig {
+  const provider = config.providersConfig.find((item) => item.id === providerId)
+  if (!provider) {
+    throw new Error(`No translation provider for id "${providerId}"`)
   }
-
-  const webPageContext = await getOrCreateWebPageContext()
-  if (!webPageContext) {
-    return undefined
-  }
-
-  // Reuse the page run's provider-ref resolution so a hosted summary and the
-  // paragraphs that follow it share one hostedAi.status fetch. Resolve only
-  // when a summary will actually be requested — with smart context off, a
-  // hosted ref must not cost a status round trip just to be discarded.
-  let webSummary: string | null | undefined
-  if (includeSummary && enableAIContentAware) {
-    try {
-      webSummary = await getOrGenerateWebPageSummary(
-        webPageContext,
-        await resolvePageProviderRef(providerConfig, undefined, hostedFeature),
-        enableAIContentAware,
-        hostedFeature,
-      )
-    } catch (error) {
-      // The summary is optional context, so a hosted denial must not abort the
-      // run from inside it. Routes with no page-translation session (input
-      // translation) always resolve here first, so rethrowing would kill the
-      // request before the translation itself — which resolves the same ref —
-      // could surface the error against the feature the user actually invoked.
-      if (!(error instanceof HostedAiProviderUnavailableError)) {
-        throw error
-      }
-      webSummary = undefined
-    }
-  }
-
-  return {
-    webTitle: webPageContext.webTitle,
-    webDescription: webPageContext.webDescription,
-    webContent: webPageContext.webContent,
-    webSummary: webSummary ?? undefined,
-  }
+  return provider
 }
 
 async function translateTextUsingPageConfig(
@@ -94,15 +38,8 @@ async function translateTextUsingPageConfig(
   text: string,
   options: {
     extraHashTags?: string[]
-    webPageContext?: {
-      webTitle?: string | null
-      webDescription?: string | null
-      webContent?: string | null
-      webSummary?: string | null
-    }
     textFormat?: TranslationTextFormat
     preserveLineBreaks?: boolean
-    // Session captured at pipeline entry by the caller; see translateTextForPage.
     sessionId?: string
     forceRetranslation?: boolean
     diagnosis?: ParagraphDiagnosis
@@ -115,7 +52,7 @@ async function translateTextUsingPageConfig(
     return ""
   }
 
-  const providerConfig = resolvePageTranslationProvider(config)
+  const providerConfig = getProviderOrThrow(config, config.pageTranslation.providerId)
 
   // Backstop only: the page modes hoist this check before DOM insertion, but
   // other callers (e.g. the page title) still rely on it here.
@@ -140,11 +77,7 @@ async function translateTextUsingPageConfig(
     text: preparedText,
     langConfig: config.language,
     providerConfig,
-    hostedFeature: "pageTranslation",
-    enableAIContentAware: config.pageTranslation.enableAIContentAware,
-    glossaryEnabled: config.glossary.enabled,
     extraHashTags: options.extraHashTags,
-    webPageContext: options.webPageContext,
     textFormat: options.textFormat,
     preserveLineBreaks: options.preserveLineBreaks,
     sessionId: options.sessionId,
@@ -160,31 +93,18 @@ export interface PageTranslationRequestOptions {
   diagnosis?: ParagraphDiagnosis
 }
 
-/**
- * Page translation — uses FEATURE_PROVIDER_DEFS['translate'].
- * Includes skip-language logic (page translation only).
- */
+/** Page translation — uses the page translation provider. */
 export async function translateTextForPage(
   text: string,
   textFormat: TranslationTextFormat = "plain",
   options?: PageTranslationRequestOptions,
 ): Promise<string> {
   // Capture the session id synchronously at pipeline entry. Reading it later
-  // (after the awaits below, e.g. the network-backed page summary) could see
-  // null if the user cancelled mid-request — the request would then be sent
-  // unscoped and stay permanently uncancellable, re-creating #1881.
+  // could see null if the user cancelled mid-request.
   const sessionId = getPageTranslationSessionId() ?? undefined
   const config = await getConfigOrThrow()
-  const providerConfig = resolvePageTranslationProvider(config)
-  const webPageContext = await getWebPagePromptContext(
-    providerConfig,
-    config.pageTranslation.enableAIContentAware,
-    true,
-    "pageTranslation",
-  )
 
   return translateTextUsingPageConfig(config, text, {
-    webPageContext,
     textFormat,
     preserveLineBreaks: options?.preserveLineBreaks,
     sessionId,
@@ -193,26 +113,13 @@ export async function translateTextForPage(
   })
 }
 
-/**
- * Page title translation — uses page translation settings, but always treats the
- * current source title as the webpage title context.
- */
+/** Page title translation — uses page translation settings. */
 export async function translateTextForPageTitle(text: string): Promise<string> {
   const sessionId = getPageTranslationSessionId() ?? undefined
   const config = await getConfigOrThrow()
-  const providerConfig = resolvePageTranslationProvider(config)
-  const webPageContext = config.pageTranslation.enableAIContentAware
-    ? await getWebPagePromptContext(providerConfig, true, false, "pageTranslation")
-    : undefined
 
   return translateTextUsingPageConfig(config, text, {
     extraHashTags: ["pageTitleTranslation"],
-    webPageContext: {
-      webTitle: text,
-      webDescription: webPageContext?.webDescription,
-      webContent: webPageContext?.webContent,
-      webSummary: webPageContext?.webSummary,
-    },
     sessionId,
   })
 }
@@ -231,9 +138,7 @@ async function resolveInputLang(
   return lang
 }
 
-/**
- * Input translation — uses FEATURE_PROVIDER_DEFS['inputTranslation'].
- */
+/** Input translation — uses the input translation provider. */
 export async function translateTextForInput(
   text: string,
   fromLang: InputTranslationLang,
@@ -241,17 +146,7 @@ export async function translateTextForInput(
   onTargetLanguageResolved?: (targetLanguage: LanguageTag) => void,
 ): Promise<string> {
   const config = await getConfigOrThrow()
-  // Capability-based, not resolveProviderConfig: that helper looks the id up in
-  // providersConfig and throws for a built-in provider, which is never a row
-  // there.
-  const resolved = resolveProviderRefForCapability(
-    "inputTranslation",
-    config.providersConfig,
-    config.inputTranslation.providerId,
-  )
-  if (!resolved) {
-    throw new Error(`No input translation provider for id "${config.inputTranslation.providerId}"`)
-  }
+  const providerConfig = getProviderOrThrow(config, config.inputTranslation.providerId)
 
   const resolvedFromLang = await resolveInputLang(fromLang, config.language)
   const resolvedToLang = await resolveInputLang(toLang, config.language)
@@ -261,13 +156,6 @@ export async function translateTextForInput(
     return ""
   }
 
-  const webPageContext = await getWebPagePromptContext(
-    resolved,
-    config.pageTranslation.enableAIContentAware,
-    true,
-    "inputTranslation",
-  )
-
   return translateTextCore({
     text,
     langConfig: {
@@ -276,11 +164,7 @@ export async function translateTextForInput(
       level: config.language.level,
     },
     extraHashTags: [`inputTranslation:${fromLang}->${toLang}`],
-    providerConfig: resolved,
-    hostedFeature: "inputTranslation",
-    enableAIContentAware: config.pageTranslation.enableAIContentAware,
-    glossaryEnabled: config.glossary.enabled,
-    webPageContext,
+    providerConfig,
     // User-typed newlines are always meaningful.
     preserveLineBreaks: true,
   })

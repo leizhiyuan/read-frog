@@ -4,7 +4,7 @@ import { CONTENT_RUNTIME_PARTS_WINDOW_KEY, takeRequestedParts } from "../parts"
 describe("takeRequestedParts", () => {
   it("runs the page parts in the top frame the manifest injects", () => {
     // Subtitles come from their own loader, on video sites only
-    expect(takeRequestedParts({}, true)).toEqual(["host", "selection", "side"])
+    expect(takeRequestedParts({}, true)).toEqual(["host", "selection"])
   })
 
   it("takes the parts the background asked for", () => {

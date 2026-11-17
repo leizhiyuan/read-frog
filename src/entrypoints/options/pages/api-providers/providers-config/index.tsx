@@ -1,447 +1,243 @@
-import type { APIProviderConfig } from "@/types/config/provider"
-import type { HostedAiFeature } from "@/utils/hosted-ai/types"
-import { Icon } from "@iconify/react"
-import { useAtom, useAtomValue, useSetAtom } from "jotai"
-import { useEffect, useRef, useState } from "react"
-import { useLocation } from "react-router"
-import { SponsorBadge } from "@/components/badges/sponsor-badge"
-import { useHostedAiStatus } from "@/components/llm-providers/use-hosted-ai-status"
+import type { Config } from "@/types/config/config"
+import type { ProviderConfig } from "@/types/config/provider"
+import { IconPlus, IconTrash } from "@tabler/icons-react"
+import { useAtomValue, useSetAtom } from "jotai"
+import { useState } from "react"
 import ProviderIcon from "@/components/provider-icon"
 import { useTheme } from "@/components/providers/theme-provider"
-import { SortableList } from "@/components/sortable-list"
-import { Badge } from "@/components/ui/base-ui/badge"
 import { Button } from "@/components/ui/base-ui/button"
-import { Dialog, DialogTrigger } from "@/components/ui/base-ui/dialog"
-import { anchoredToastManager } from "@/components/ui/base-ui/toast"
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/base-ui/tooltip"
-import { isAPIProvider, isAPIProviderConfig } from "@/types/config/provider"
-import { configAtom, configFieldsAtomMap } from "@/utils/atoms/config"
-import { patchProviderConfigAtom } from "@/utils/atoms/entity-config"
-import { getAPIProvidersConfig, getProviderConfigById } from "@/utils/config/helpers"
 import {
-  FEATURE_KEYS,
-  FEATURE_PROVIDER_DEFS,
-  getFeatureLabelI18nKey,
-} from "@/utils/constants/feature-providers"
-import { BUILT_IN_AI_PROVIDER_IDS, type BuiltInAiProviderId } from "@/utils/constants/provider-ids"
-import { API_PROVIDER_ITEMS } from "@/utils/constants/providers"
-import { getSelectionToolbarActions } from "@/utils/custom-actions"
-import { getHostedAiTierStatus } from "@/utils/hosted-ai/status"
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/base-ui/dialog"
+import { Input } from "@/components/ui/base-ui/input"
+import { Label } from "@/components/ui/base-ui/label"
+import { Switch } from "@/components/ui/base-ui/switch"
+import { toastManager } from "@/components/ui/base-ui/toast"
+import { configAtom, writeConfigAtom } from "@/utils/atoms/config"
+import { FEATURE_KEYS, FEATURE_PROVIDER_DEFS } from "@/utils/constants/feature-providers"
+import {
+  API_PROVIDER_ITEMS,
+  DEFAULT_PROVIDER_CONFIG,
+  getProviderItemName,
+  PROVIDER_ITEMS,
+} from "@/utils/constants/providers"
+import { getRandomUUID } from "@/utils/crypto-polyfill"
 import { i18n } from "@/utils/i18n"
-import {
-  getRequestedProviderId,
-  getRequestedProviderType,
-  PROVIDER_CONFIG_SECTION_ID,
-  shouldHighlightApiKey,
-} from "@/utils/navigation"
-import { isDurablyUnusableTier } from "@/utils/providers/provider-availability"
-import {
-  BUILT_IN_AI_PROVIDER_LOGO,
-  BUILT_IN_AI_ADVANCE_PROVIDER_ID,
-  getBuiltInAiProviderName,
-  isBuiltInAiProviderId,
-} from "@/utils/providers/provider-registry"
-import { ConfigItem } from "../../../components/config-item"
-import { EntityEditor } from "../../../components/entity-editor"
-import { EntityEditorLayout } from "../../../components/entity-editor-layout"
-import { EntityListItem } from "../../../components/entity-list-item"
-import { EntityListRail } from "../../../components/entity-list-rail"
-import AddProviderDialog from "./add-provider-dialog"
-import { highlightedProviderFieldAtom, selectedProviderIdAtom } from "./atoms"
-import { ProviderConfigForm } from "./provider-config-form"
-import { BuiltInProviderEditor, ProviderEditor } from "./provider-editor"
-import { addProvider } from "./utils"
+import { ConfigSection } from "../../../components/config-section"
 
-/**
- * Opens the provider a deep link points at — by `?provider=` id, the one an API-key prompt
- * elsewhere on the page uses, or by `?providerType=` for links written by someone who cannot know
- * the id, such as a provider's own site. A type with no provider behind it gets one created.
- *
- * Keyed on the history entry so the same link works twice, and an id is held back until it
- * resolves so a link followed before the config loads is not dropped.
- */
-function useRequestedProvider() {
-  const { search, key: locationKey } = useLocation()
-  const [providersConfig, setProvidersConfig] = useAtom(configFieldsAtomMap.providersConfig)
-  const setSelectedProviderId = useSetAtom(selectedProviderIdAtom)
-  const setHighlightedField = useSetAtom(highlightedProviderFieldAtom)
-  const handledLocationRef = useRef<string | null>(null)
+type EditableProviderConfig = Extract<ProviderConfig, { provider: "deepl" | "deeplx" }>
 
-  useEffect(() => {
-    const marker = `${locationKey}:${search}`
-    if (handledLocationRef.current === marker) return
-
-    const highlightRequestedField = () => {
-      if (shouldHighlightApiKey(search)) {
-        setHighlightedField("apiKey")
-      }
-    }
-
-    const providerId = getRequestedProviderId(search)
-    if (providerId) {
-      if (
-        !isBuiltInAiProviderId(providerId) &&
-        !getProviderConfigById(providersConfig, providerId)
-      ) {
-        return
-      }
-
-      handledLocationRef.current = marker
-      void setSelectedProviderId(providerId)
-      highlightRequestedField()
-      return
-    }
-
-    const requestedType = getRequestedProviderType(search)
-    if (!requestedType || !isAPIProvider(requestedType)) return
-
-    // Claimed before anything awaits: adding a provider rewrites the config this effect reads,
-    // and React's development double-invoke runs it a second time. Either would add a duplicate.
-    handledLocationRef.current = marker
-
-    const existingProvider = getAPIProvidersConfig(providersConfig).find(
-      (provider) => provider.provider === requestedType,
-    )
-    if (existingProvider) {
-      void setSelectedProviderId(existingProvider.id)
-      highlightRequestedField()
-      return
-    }
-
-    void addProvider(
-      requestedType,
-      providersConfig,
-      setProvidersConfig,
-      setSelectedProviderId,
-    ).then(highlightRequestedField)
-  }, [
-    locationKey,
-    search,
-    providersConfig,
-    setProvidersConfig,
-    setSelectedProviderId,
-    setHighlightedField,
-  ])
+function getAssignedFeatureCount(config: Config, id: string) {
+  return FEATURE_KEYS.filter((key) => FEATURE_PROVIDER_DEFS[key].getProviderId(config) === id)
+    .length
 }
 
-export function ProvidersConfig() {
-  const selectedProviderId = useAtomValue(selectedProviderIdAtom)
-  useRequestedProvider()
-  const editor = isBuiltInAiProviderId(selectedProviderId) ? (
-    <BuiltInProviderPanel key={selectedProviderId} providerId={selectedProviderId} />
-  ) : (
-    <ProviderConfigForm key={selectedProviderId} />
-  )
-
-  return (
-    <ConfigItem
-      id={PROVIDER_CONFIG_SECTION_ID}
-      orientation="vertical"
-      title={i18n.t("options.apiProviders.configTitle")}
-      description={i18n.t("options.apiProviders.description")}
-    >
-      <EntityEditorLayout list={<ProviderCardList />} editor={editor} />
-    </ConfigItem>
-  )
-}
-
-function ProviderCardList() {
-  const [providersConfig, setProvidersConfig] = useAtom(configFieldsAtomMap.providersConfig)
-  const apiProvidersConfig = getAPIProvidersConfig(providersConfig)
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
-
-  const handleReorder = (newList: APIProviderConfig[]) => {
-    const desiredOrderIds = newList.map((provider) => provider.id)
-    const desiredOrderIdSet = new Set(desiredOrderIds)
-
-    const nonApiProviders = providersConfig.filter((provider) => !isAPIProviderConfig(provider))
-    const currentApiProviders = providersConfig.filter(isAPIProviderConfig)
-
-    const apiProvidersById = new Map(
-      currentApiProviders.map((provider) => [provider.id, provider] as const),
-    )
-
-    const reorderedApiProviders: APIProviderConfig[] = []
-    for (const id of desiredOrderIds) {
-      const provider = apiProvidersById.get(id)
-      if (provider) reorderedApiProviders.push(provider)
-    }
-
-    // Preserve any API providers that appeared while dragging (e.g. config sync)
-    for (const provider of currentApiProviders) {
-      if (!desiredOrderIdSet.has(provider.id)) {
-        reorderedApiProviders.push(provider)
-      }
-    }
-
-    void setProvidersConfig([...nonApiProviders, ...reorderedApiProviders])
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
-        <DialogTrigger
-          render={
-            <Button
-              variant="outline"
-              className="h-auto rounded-xl border-dashed border-accent bg-accent/8 p-3 hover:bg-accent/14 dark:border-accent dark:bg-accent/12 dark:hover:bg-accent/20"
-              onClick={() => setIsAddDialogOpen(true)}
-            />
-          }
-        >
-          <div className="flex w-full items-center justify-center gap-2">
-            <Icon icon="tabler:plus" className="size-4" />
-            <span className="text-sm">{i18n.t("options.apiProviders.addProvider")}</span>
-          </div>
-        </DialogTrigger>
-        <AddProviderDialog onClose={() => setIsAddDialogOpen(false)} />
-      </Dialog>
-      <ProviderListSection title={i18n.t("options.apiProviders.builtInProvider")}>
-        <div className="flex flex-col gap-4 pt-2">
-          {BUILT_IN_AI_PROVIDER_IDS.map((providerId) => (
-            <BuiltInProviderCard key={providerId} providerId={providerId} />
-          ))}
-        </div>
-      </ProviderListSection>
-      {apiProvidersConfig.length > 0 && (
-        <ProviderListSection title={i18n.t("options.apiProviders.yourProviders")}>
-          <EntityListRail>
-            <SortableList
-              list={apiProvidersConfig}
-              setList={handleReorder}
-              className="flex flex-col gap-4 pt-2"
-              renderItem={(providerConfig) => <ProviderCard providerConfig={providerConfig} />}
-            />
-          </EntityListRail>
-        </ProviderListSection>
-      )}
-    </div>
-  )
-}
-
-function ProviderListSection({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2 pt-1">
-      <h3 className="px-1 text-xs font-medium text-muted-foreground">{title}</h3>
-      {children}
-    </section>
-  )
-}
-
-function ProviderCard({ providerConfig }: { providerConfig: APIProviderConfig }) {
-  const { id, name, provider, enabled } = providerConfig
+function ProviderCard({
+  providerConfig,
+  selected,
+  onSelect,
+}: {
+  providerConfig: ProviderConfig
+  selected: boolean
+  onSelect: () => void
+}) {
   const { theme } = useTheme()
-  const [selectedProviderId, setSelectedProviderId] = useAtom(selectedProviderIdAtom)
-  const patchProviderConfig = useSetAtom(patchProviderConfigAtom)
   const config = useAtomValue(configAtom)
-  const sponsor = API_PROVIDER_ITEMS[provider].sponsor
-  const switchRef = useRef<HTMLButtonElement>(null)
+  const setConfig = useSetAtom(writeConfigAtom)
+  const item = PROVIDER_ITEMS[providerConfig.provider]
+  const assignedCount = getAssignedFeatureCount(config, providerConfig.id)
 
-  const assignedFeatures = FEATURE_KEYS.filter(
-    (key) => FEATURE_PROVIDER_DEFS[key].getProviderId(config) === id,
-  )
-  const assignedCustomActions = getSelectionToolbarActions(config.selectionToolbar).filter(
-    (action) => action.providerId === id,
-  )
-  const isLanguageDetectionProvider =
-    config.languageDetection.mode === "llm" && config.languageDetection.providerId === id
-  const totalAssigned =
-    assignedFeatures.length + assignedCustomActions.length + (isLanguageDetectionProvider ? 1 : 0)
-
-  const handleProviderEnabledChange = (checked: boolean) => {
-    if (!checked && enabled && totalAssigned > 0) {
-      if (!switchRef.current) return
-
-      anchoredToastManager.add({
-        id: `provider-disable-${id}`,
-        positionerProps: {
-          anchor: switchRef.current,
-          sideOffset: 6,
-        },
+  const toggle = (enabled: boolean) => {
+    if (!enabled && assignedCount > 0) {
+      toastManager.add({
         type: "error",
         title: i18n.t("options.apiProviders.form.providerInUseCannotDisable", [
-          name,
-          totalAssigned,
+          providerConfig.name,
+          String(assignedCount),
         ]),
       })
       return
     }
-
-    void patchProviderConfig({ id, changes: { enabled: checked } })
+    void setConfig({
+      providersConfig: config.providersConfig.map((provider) =>
+        provider.id === providerConfig.id ? { ...provider, enabled } : provider,
+      ),
+    })
   }
 
   return (
-    <EntityListItem.Root
-      data-provider-id={id}
-      selected={selectedProviderId === id}
-      onClick={() => setSelectedProviderId(id)}
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") onSelect()
+      }}
+      className={`flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors ${
+        selected ? "border-primary bg-accent/40" : "border-border hover:bg-accent/20"
+      }`}
     >
-      <EntityListItem.Badges>
-        <>
-          {sponsor?.sponsoring && (
-            <SponsorBadge
-              labelI18nKey={sponsor.badgeI18nKey}
-              className="absolute -top-2 left-2 text-[10px]"
-            />
-          )}
-          <FeatureCountBadge count={totalAssigned}>
-            {assignedFeatures.map((key) => (
-              <li key={key}>{i18n.t(getFeatureLabelI18nKey(key))}</li>
-            ))}
-            {isLanguageDetectionProvider && (
-              <li>{i18n.t("options.apiProviders.languageDetection.title")}</li>
-            )}
-            {assignedCustomActions.map((action) => (
-              <li key={action.id}>{action.name}</li>
-            ))}
-          </FeatureCountBadge>
-        </>
-      </EntityListItem.Badges>
-      <EntityListItem.Content>
-        <ProviderIcon
-          logo={API_PROVIDER_ITEMS[provider].logo(theme)}
-          name={name}
-          size="base"
-          textClassName="text-sm"
-        />
-        <EntityListItem.Toggle
-          ref={switchRef}
-          aria-label={name}
-          checked={enabled}
-          onCheckedChange={handleProviderEnabledChange}
-        />
-      </EntityListItem.Content>
-    </EntityListItem.Root>
-  )
-}
-
-function FeatureCountBadge({ count, children }: { count: number; children: React.ReactNode }) {
-  if (count === 0) {
-    return null
-  }
-
-  return (
-    <div className="absolute -top-2 right-2 flex items-center justify-center gap-1">
-      <Tooltip>
-        <TooltipTrigger render={<Badge variant="accent" className="cursor-default" size="sm" />}>
-          {i18n.t("options.apiProviders.badges.featureCount", [count])}
-        </TooltipTrigger>
-        <TooltipContent>
-          <ul className="list-inside list-disc marker:text-green-500">{children}</ul>
-        </TooltipContent>
-      </Tooltip>
+      <div className="flex min-w-0 items-center gap-3">
+        <ProviderIcon logo={item?.logo(theme) ?? ""} name={providerConfig.name} size="base" />
+        <div className="min-w-0">
+          <p className="truncate text-sm font-medium">{providerConfig.name}</p>
+          <p className="truncate text-xs text-muted-foreground">{item?.website}</p>
+        </div>
+      </div>
+      <Switch
+        checked={providerConfig.enabled}
+        onCheckedChange={toggle}
+        onClick={(event) => event.stopPropagation()}
+      />
     </div>
   )
 }
 
-function BuiltInProviderCard({ providerId }: { providerId: BuiltInAiProviderId }) {
-  const [selectedProviderId, setSelectedProviderId] = useAtom(selectedProviderIdAtom)
+function ProviderForm({ providerConfig }: { providerConfig: EditableProviderConfig }) {
   const config = useAtomValue(configAtom)
-  const providerName = getBuiltInAiProviderName(providerId)
-  const assignedFeatures = FEATURE_KEYS.filter(
-    (key) => FEATURE_PROVIDER_DEFS[key].getProviderId(config) === providerId,
-  )
-  const assignedCustomActions = getSelectionToolbarActions(config.selectionToolbar).filter(
-    (action) => action.providerId === providerId,
-  )
-  const isLanguageDetectionProvider =
-    config.languageDetection.mode === "llm" && config.languageDetection.providerId === providerId
-  const totalAssigned =
-    assignedFeatures.length + assignedCustomActions.length + (isLanguageDetectionProvider ? 1 : 0)
+  const setConfig = useSetAtom(writeConfigAtom)
 
-  return (
-    <EntityListItem.Root
-      data-provider-id={providerId}
-      selected={selectedProviderId === providerId}
-      onClick={() => setSelectedProviderId(providerId)}
-    >
-      <EntityListItem.Badges>
-        <FeatureCountBadge count={totalAssigned}>
-          {assignedFeatures.map((key) => (
-            <li key={key}>{i18n.t(getFeatureLabelI18nKey(key))}</li>
-          ))}
-          {isLanguageDetectionProvider && (
-            <li>{i18n.t("options.apiProviders.languageDetection.title")}</li>
-          )}
-          {assignedCustomActions.map((action) => (
-            <li key={action.id}>{action.name}</li>
-          ))}
-        </FeatureCountBadge>
-      </EntityListItem.Badges>
-      <EntityListItem.Content>
-        <ProviderIcon
-          logo={BUILT_IN_AI_PROVIDER_LOGO}
-          name={providerName}
-          size="base"
-          textClassName="text-sm"
-        />
-        <EntityListItem.Toggle aria-label={providerName} checked disabled />
-      </EntityListItem.Content>
-    </EntityListItem.Root>
-  )
-}
+  const update = (changes: Partial<EditableProviderConfig>) => {
+    void setConfig({
+      providersConfig: config.providersConfig.map((provider) =>
+        provider.id === providerConfig.id ? { ...provider, ...changes } : provider,
+      ),
+    })
+  }
 
-/**
- * Every hosted-capable FEATURE_KEYS entry, in FEATURE_KEYS order. Language
- * detection is a separate ProviderCapability rather than a FeatureKey, so the
- * built-in editor renders it with LanguageDetectionAssignment below.
- */
-const BUILT_IN_FEATURE_KEYS = [
-  "pageTranslation",
-  "videoSubtitles",
-  "selectionTranslation",
-  "inputTranslation",
-  "noteSuggestion",
-] as const
-
-function BuiltInProviderPanel({ providerId }: { providerId: BuiltInAiProviderId }) {
-  const isAdvance = providerId === BUILT_IN_AI_ADVANCE_PROVIDER_ID
-  const modelTier = isAdvance ? ("advance" as const) : ("normal" as const)
-  const { status } = useHostedAiStatus()
-
-  // Both cards list every hosted-capable feature. Same policy as the provider
-  // dropdowns, and now literally the same predicate: the plan badge is the
-  // plan this account lacks (`upgradeTo`); rows lock only on durable
-  // account facts (sign-in, plan), never on transient service state (exhausted
-  // quota, open circuit, unconfigured model) — those surface at run time. Fail
-  // open while status is unknown so one failed fetch never locks the UI.
-  const getAssignmentStatus = (feature: HostedAiFeature) => {
-    const tierStatus = getHostedAiTierStatus(status, feature, modelTier)
-    return {
-      disabled: isDurablyUnusableTier(tierStatus),
-      upgradeTo: tierStatus?.upgradeTo ?? undefined,
+  const remove = () => {
+    const assignedCount = getAssignedFeatureCount(config, providerConfig.id)
+    if (assignedCount > 0) {
+      toastManager.add({
+        type: "error",
+        title: i18n.t("options.apiProviders.form.providerInUseCannotDisable", [
+          providerConfig.name,
+          String(assignedCount),
+        ]),
+      })
+      return
     }
+    void setConfig({
+      providersConfig: config.providersConfig.filter(
+        (provider) => provider.id !== providerConfig.id,
+      ),
+    })
   }
 
   return (
-    <BuiltInProviderEditor.Provider providerId={providerId}>
-      <EntityEditor.Root>
-        <EntityEditor.Body className="gap-6">
-          <div className="flex flex-col gap-4">
-            <ProviderEditor.Identity />
-            <ProviderEditor.Attribution>
-              {i18n.t(
-                isAdvance
-                  ? "options.apiProviders.providers.attribution.builtInAiAdvance"
-                  : "options.apiProviders.providers.attribution.builtInAi",
-              )}
-            </ProviderEditor.Attribution>
-          </div>
-          <ProviderEditor.Assignments defaultOpen>
-            {BUILT_IN_FEATURE_KEYS.map((featureKey) => (
-              <ProviderEditor.FeatureAssignment
-                key={featureKey}
-                featureKey={featureKey}
-                {...getAssignmentStatus(featureKey)}
-              />
-            ))}
-            <ProviderEditor.LanguageDetectionAssignment
-              {...getAssignmentStatus("languageDetection")}
+    <div className="flex flex-col gap-4 rounded-lg border p-4">
+      <div className="flex flex-col gap-1.5">
+        <Label>{i18n.t("options.apiProviders.form.fields.name")}</Label>
+        <Input
+          value={providerConfig.name}
+          onChange={(event) => update({ name: event.target.value })}
+        />
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <Label>API Key</Label>
+        <Input
+          type="password"
+          value={providerConfig.apiKey ?? ""}
+          placeholder={i18n.t("options.apiProviders.form.fields.apiKey")}
+          onChange={(event) => update({ apiKey: event.target.value })}
+        />
+      </div>
+      {providerConfig.provider === "deeplx" && (
+        <div className="flex flex-col gap-1.5">
+          <Label>Base URL</Label>
+          <Input
+            value={providerConfig.baseURL ?? ""}
+            placeholder={DEFAULT_PROVIDER_CONFIG.deeplx.baseURL}
+            onChange={(event) => update({ baseURL: event.target.value })}
+          />
+        </div>
+      )}
+      <div className="flex justify-end">
+        <Button variant="destructive" size="sm" onClick={remove}>
+          <IconTrash className="size-4" />
+          {i18n.t("options.apiProviders.form.delete")}
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function AddProviderDialog() {
+  const [open, setOpen] = useState(false)
+  const config = useAtomValue(configAtom)
+  const setConfig = useSetAtom(writeConfigAtom)
+  const { theme } = useTheme()
+
+  const add = (providerType: "deepl" | "deeplx") => {
+    const template = DEFAULT_PROVIDER_CONFIG[providerType]
+    void setConfig({
+      providersConfig: [
+        ...config.providersConfig,
+        {
+          ...structuredClone(template),
+          id: getRandomUUID(),
+          name: getProviderItemName(providerType),
+        },
+      ],
+    })
+    setOpen(false)
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button size="sm" />}>
+        <IconPlus className="size-4" />
+        {i18n.t("options.apiProviders.addProvider")}
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{i18n.t("options.apiProviders.dialog.title")}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-2">
+          {(["deepl", "deeplx"] as const).map((providerType) => (
+            <button
+              key={providerType}
+              type="button"
+              className="flex flex-col items-center gap-2 rounded-lg border p-4 hover:bg-accent/30"
+              onClick={() => add(providerType)}
+            >
+              <ProviderIcon logo={API_PROVIDER_ITEMS[providerType].logo(theme)} size="md" />
+              <span className="text-sm font-medium">{getProviderItemName(providerType)}</span>
+            </button>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+export function ProvidersConfig() {
+  const config = useAtomValue(configAtom)
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const selected = config.providersConfig.find((item) => item.id === selectedId)
+  const editableSelected =
+    selected && (selected.provider === "deepl" || selected.provider === "deeplx")
+
+  return (
+    <ConfigSection id="providers-config" title={i18n.t("options.apiProviders.configTitle")}>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          {config.providersConfig.map((providerConfig) => (
+            <ProviderCard
+              key={providerConfig.id}
+              providerConfig={providerConfig}
+              selected={providerConfig.id === selectedId}
+              onSelect={() => setSelectedId(providerConfig.id)}
             />
-            <ProviderEditor.CustomActionAssignments {...getAssignmentStatus("customAction")} />
-          </ProviderEditor.Assignments>
-        </EntityEditor.Body>
-      </EntityEditor.Root>
-    </BuiltInProviderEditor.Provider>
+          ))}
+        </div>
+        <AddProviderDialog />
+        {editableSelected && <ProviderForm providerConfig={selected} />}
+      </div>
+    </ConfigSection>
   )
 }

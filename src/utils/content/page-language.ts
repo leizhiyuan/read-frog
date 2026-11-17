@@ -149,9 +149,7 @@ export async function detectPageLanguageLightweight(
     }
   }
 
-  const { code, source } = await detectLanguageWithSource(textForDetection, {
-    enableLLM: false,
-  })
+  const { code, source } = await detectLanguageWithSource(textForDetection)
 
   if (metadataCode && (code === "und" || areCompatibleDetectedCodes(metadataCode, code))) {
     return {

@@ -1,7 +1,6 @@
 import type { SubtitlesFragment } from "../../types"
 import type { SubtitlesFetcher } from "../types"
 import type { CaptionTrack, PlayerData, YoutubeTimedText } from "./types"
-import { getLocalConfig } from "@/utils/config/storage"
 import {
   ENSURE_SUBTITLES_REQUEST_TYPE,
   ENSURE_SUBTITLES_RESPONSE_TYPE,
@@ -471,9 +470,6 @@ export class YoutubeSubtitlesFetcher implements SubtitlesFetcher {
   }
 
   private async processRawEvents(events: YoutubeTimedText[]): Promise<SubtitlesFragment[]> {
-    const config = await getLocalConfig()
-    const enableAISegmentation = config?.videoSubtitles?.aiSegmentation ?? false
-
     this.preSegmented = false
     const filteredEvents = filterNoiseFromEvents(events)
     const format = detectFormat(filteredEvents)
@@ -489,10 +485,6 @@ export class YoutubeSubtitlesFetcher implements SubtitlesFetcher {
     if (format === "animated") {
       this.preSegmented = true
       return parseAnimatedSubtitles(filteredEvents)
-    }
-
-    if (enableAISegmentation) {
-      return parseStandardSubtitles(filteredEvents)
     }
 
     const fragments =

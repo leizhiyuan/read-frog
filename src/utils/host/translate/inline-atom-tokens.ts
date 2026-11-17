@@ -1,5 +1,3 @@
-import { BATCH_SEPARATOR } from "@/utils/constants/prompt"
-
 /**
  * Plain-text placeholder protocol for inline atoms (rendered formulas) in
  * bilingual page translation. An atom is replaced by `{{n}}` in the request
@@ -140,12 +138,3 @@ export function auditInlineAtomTokens(source: string, output: string): InlineAto
     duplicates,
   }
 }
-
-// No worked example on purpose: a marker slot inside an example teaches models
-// a base rate for emitting the marker (see the sentinel notes in
-// utils/constants/prompt.ts).
-export const INLINE_ATOM_TOKEN_SYSTEM_PROMPT = `## Protected Placeholder Rules
-These mandatory rules override any conflicting instructions above:
-1. A placeholder is \`${INLINE_ATOM_TOKEN_DELIMITERS.open}\` immediately followed by a number and \`${INLINE_ATOM_TOKEN_DELIMITERS.close}\`. It stands for an inline formula or symbol and is not text to translate.
-2. Within each input segment (segments are separated by a standalone ${BATCH_SEPARATOR} line when present), copy every placeholder into that segment's output exactly once, character for character: same number, same brackets, no spaces inside.
-3. Never translate, renumber, drop, add, merge, or reformat a placeholder. A placeholder may move within its segment to follow the target-language word order.`

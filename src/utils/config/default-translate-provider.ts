@@ -20,8 +20,8 @@ const log = createLogger("config/default-translate-provider")
  *
  * A fresh config ships with Microsoft Translate because it works everywhere, including the
  * networks where Google is blocked — that keeps install itself off the network, so the first
- * config write and the guide tab never wait on a probe that, on a blocked network, does not
- * fail fast but simply hangs. Once the user is set up we probe the real Google endpoint:
+ * config write never waits on a probe that, on a blocked network, does not fail fast but
+ * simply hangs. Once the user is set up we probe the real Google endpoint:
  * where Google answers, every translate feature still holding the Microsoft default moves to
  * Google, the better provider where it works. Slots the user already changed keep their
  * choice; where Google is blocked, the Microsoft default stays.

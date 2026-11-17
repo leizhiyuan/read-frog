@@ -14,7 +14,6 @@ import {
   INLINE_ATTRIBUTE,
   INLINE_CONTENT_CLASS,
   PARAGRAPH_ATTRIBUTE,
-  TRANSLATION_ERROR_CONTAINER_CLASS,
   TRANSLATION_ONLY_ATTRIBUTE,
   VIRTUAL_PARAGRAPH_ATTRIBUTE,
   WALKED_ATTRIBUTE,
@@ -180,12 +179,6 @@ describe("translate", () => {
       await translateWalkedElement(document.body, id, effectiveConfig, toggle)
       // Flush batched DOM operations to ensure all changes are applied before assertions
       flushBatchedOperations()
-    })
-  }
-
-  async function waitForTranslationError(wrapper: Element | null) {
-    await waitFor(() => {
-      expect(wrapper?.querySelector(`.${TRANSLATION_ERROR_CONTAINER_CLASS}`)).toBeTruthy()
     })
   }
 
@@ -1125,7 +1118,6 @@ describe("translate", () => {
           await translationPromise
 
           expect(getTranslationWrappers(tweet)).toHaveLength(0)
-          expect(tweet.querySelector(`.${TRANSLATION_ERROR_CONTAINER_CLASS}`)).toBeFalsy()
           expect(sourceSpan.innerHTML).toBe(originalInnerHTML)
           expect(sourceSpan.firstChild).toBe(originalTextNode)
         })
@@ -2576,30 +2568,6 @@ describe("translate", () => {
   })
 
   describe("translation errors", () => {
-    it("bilingual mode: should keep original text and show inline error UI when translation fails", async () => {
-      vi.mocked(translateTextForPage).mockRejectedValueOnce(new Error("Translation failed"))
-
-      render(<div data-testid="test-node">{MOCK_ORIGINAL_TEXT}</div>)
-      const node = screen.getByTestId("test-node")
-      await removeOrShowPageTranslation("bilingual", true)
-
-      const wrapper = expectTranslationWrapper(node, "bilingual")
-      expect(node.textContent).toContain(MOCK_ORIGINAL_TEXT)
-      await waitForTranslationError(wrapper)
-    })
-
-    it("translationOnly mode: should keep original text and show inline error UI when translation fails", async () => {
-      vi.mocked(translateTextForPage).mockRejectedValueOnce(new Error("Translation failed"))
-
-      render(<div data-testid="test-node">{MOCK_ORIGINAL_TEXT}</div>)
-      const node = screen.getByTestId("test-node")
-      await removeOrShowPageTranslation("translationOnly", true)
-
-      const wrapper = expectTranslationWrapper(node, "translationOnly")
-      expect(node.textContent).toContain(MOCK_ORIGINAL_TEXT)
-      await waitForTranslationError(wrapper)
-    })
-
     it("translationOnly mode: should still remove the wrapper when translation returns an empty string", async () => {
       vi.mocked(translateTextForPage).mockResolvedValueOnce("")
 
@@ -3156,26 +3124,6 @@ describe("translate", () => {
       expect(translatedStrong?.className).toBe("place")
     })
 
-    it("keeps the source DOM and existing error UI when the full HTML fallback fails", async () => {
-      vi.mocked(translateTextForPage)
-        .mockResolvedValueOnce(`<strong>损坏的 marker</strong>`)
-        .mockRejectedValueOnce(new Error("Fallback failed"))
-
-      render(
-        <div data-testid="test-node">
-          I visited <strong className="place">Vancouver</strong>.
-        </div>,
-      )
-      const node = screen.getByTestId("test-node")
-
-      await removeOrShowPageTranslation("translationOnly", true)
-
-      expect(translateTextForPage).toHaveBeenCalledTimes(2)
-      const wrapper = expectTranslationWrapper(node, "translationOnly")
-      expect(node.textContent).toContain("I visited Vancouver.")
-      await waitForTranslationError(wrapper)
-    })
-
     it("disables placeholders for the current DeepLX endpoint after its first integrity failure", async () => {
       const deeplxConfig: Config = {
         ...TRANSLATION_ONLY_CONFIG,
@@ -3614,25 +3562,6 @@ describe("translate", () => {
         expect(viewer).not.toHaveAttribute(TRANSLATION_ONLY_ATTRIBUTE)
       })
 
-      it("translation only mode: keeps a failing paragraph from taking the others down", async () => {
-        vi.mocked(translateTextForPage).mockImplementation(async (text) => {
-          if (text === paragraphs[1]) throw new Error("provider exploded")
-          const index = paragraphs.indexOf(text)
-          return translations[index]!
-        })
-        const viewer = renderPlainTextViewer()
-
-        await removeOrShowPageTranslation("translationOnly", true)
-
-        expect(viewer.textContent).toContain(translations[0])
-        expect(viewer.textContent).toContain(translations[2])
-        // The failed unit keeps its own source text and its error UI.
-        expect(viewer.textContent).toContain(paragraphs[1])
-        await waitForTranslationError(viewer)
-      })
-    })
-
-    describe("github diff table - should not translate review code snippets", () => {
       it("bilingual mode: should keep github release attribution in translation source", async () => {
         const originalLocation = window.location
         setHost("github.com")

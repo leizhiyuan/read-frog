@@ -1,6 +1,5 @@
 import type { AnalyticsFailureReason } from "@/types/analytics"
 import { ANALYTICS_FAILURE_REASONS } from "@/types/analytics"
-import { PROVIDER_SETUP_ERROR_NAME } from "@/utils/providers/provider-setup-error"
 
 const FAILURE_REASONS: ReadonlySet<string> = new Set(ANALYTICS_FAILURE_REASONS)
 
@@ -35,25 +34,13 @@ function readProperty(value: object, key: string): unknown {
 }
 
 function reasonFromErrorName(error: object): AnalyticsFailureReason | undefined {
-  switch (readProperty(error, "name")) {
-    case PROVIDER_SETUP_ERROR_NAME:
-    case "AI_LoadSettingError":
-      return "precheck"
-    case "AI_LoadAPIKeyError":
-      return "missing_api_key"
-    case "AI_NoObjectGeneratedError":
-    case "AI_TypeValidationError":
-    case "AI_JSONParseError":
-      return "invalid_output"
-    case "AI_APICallError": {
-      const statusCode = readProperty(error, "statusCode")
-      if (statusCode === 401 || statusCode === 403) return "provider_auth"
-      if (statusCode === 429) return "rate_limited"
-      return "provider_error"
-    }
-    default:
-      return undefined
+  const statusCode = readProperty(error, "statusCode")
+  if (typeof statusCode === "number") {
+    if (statusCode === 401 || statusCode === 403) return "provider_auth"
+    if (statusCode === 429) return "rate_limited"
+    return "provider_error"
   }
+  return undefined
 }
 
 /**

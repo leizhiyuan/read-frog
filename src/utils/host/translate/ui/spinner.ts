@@ -1,13 +1,7 @@
-import type { APICallError } from "ai"
 import type { ParagraphDiagnosis } from "../paragraph-diagnosis"
 import type { TranslationTextFormat } from "@/types/config/translate"
-import * as React from "react"
-import textSmallCSS from "@/assets/styles/text-small.css?inline"
-import themeCSS from "@/assets/styles/theme.css?inline"
-import { TranslationError } from "@/components/translation/error"
-import { createReactShadowHost } from "@/utils/react-shadow-host/create-shadow-host"
 import { isTranslationCancelledError } from "@/utils/request/cancellation"
-import { SPINNER_CLASS, TRANSLATION_ERROR_CONTAINER_CLASS } from "../../../constants/dom-labels"
+import { SPINNER_CLASS } from "../../../constants/dom-labels"
 import { getContainingShadowRoot, getOwnerDocument } from "../../dom/node"
 import { translateTextForPage } from "../translate-variants"
 import { ensurePresetStyles } from "./style-injector"
@@ -119,7 +113,7 @@ export function createSpinnerInside(translatedWrapperNode: HTMLElement): HTMLEle
 }
 
 export async function getTranslatedTextAndRemoveSpinner(
-  nodes: ChildNode[],
+  _nodes: ChildNode[],
   textContent: string,
   spinner: HTMLElement,
   translatedWrapperNode: HTMLElement,
@@ -142,23 +136,6 @@ export async function getTranslatedTextAndRemoveSpinner(
     if (isTranslationCancelledError(error)) return undefined
     if (!isCurrent()) return undefined
     diagnosis?.untranslated("error", { error })
-
-    const errorComponent = React.createElement(TranslationError, {
-      nodes,
-      error: error as APICallError,
-    })
-
-    const container = createReactShadowHost(errorComponent, {
-      className: TRANSLATION_ERROR_CONTAINER_CLASS,
-      position: "inline",
-      inheritStyles: false,
-      cssContent: [themeCSS, textSmallCSS],
-      style: {
-        verticalAlign: "middle",
-      },
-    })
-
-    translatedWrapperNode.appendChild(container)
   } finally {
     cancelSpinnerAnimation(spinner)
     spinner.remove()

@@ -13,10 +13,8 @@ import { onMessage } from "@/utils/message"
 import { isSiteEnabled, SITE_CONTROL_URL_WINDOW_KEY } from "@/utils/site-control"
 import { ensureRemoteSiteRulesLoaded } from "@/utils/site-rules/active"
 import { getEffectiveSiteRule } from "@/utils/site-rules/effective"
-import { urlMatchesPattern } from "@/utils/url-pattern"
 import { isSameOriginIframeSender, resolveSiteControlUrl } from "./iframe-injection-utils"
 import { getPageTranslationEnabled } from "./page-translation-state"
-import { isSelectionToolbarHiddenInTab } from "./selection-toolbar-hidden"
 
 const log = createLogger("background/iframe-injection")
 
@@ -329,16 +327,6 @@ export function setupIframeInjection() {
       if (!frame || (documentId && frame.documentId && frame.documentId !== documentId))
         return false
       if (!isSiteEnabled(tab.url, config) || !isSiteEnabled(frameUrl, config)) return false
-      if (
-        !config.selectionToolbar.enabled ||
-        config.selectionToolbar.disabledSelectionToolbarPatterns.some((pattern) =>
-          urlMatchesPattern(frameUrl, pattern),
-        )
-      )
-        return false
-      // Hidden from a toolbar's × until the page reloads: like a site opt-out,
-      // the frame gets no toolbar runtime.
-      if (await isSelectionToolbarHiddenInTab(tabId)) return false
       if (
         getEffectiveSiteRule(config, tab.url).injectIntoIframes === false ||
         getEffectiveSiteRule(config, frameUrl).injectIntoIframes === false
