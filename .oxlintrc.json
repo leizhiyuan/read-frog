@@ -23,11 +23,6 @@
     "**/.turbo/**",
     "repos/**",
     "scripts/output/**",
-    ".agents/**",
-    ".claude/**",
-    ".codex/**",
-    ".cursor/**",
-    "**/skills/**",
     "**/*.md/**",
     "**/pnpm-lock.yaml"
   ],

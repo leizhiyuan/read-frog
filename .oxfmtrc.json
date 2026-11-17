@@ -15,10 +15,6 @@
     ".turbo/**",
     "repos/**",
     "scripts/output/**",
-    ".agents/**",
-    ".claude/**",
-    ".codex/**",
-    ".cursor/**",
     "pnpm-lock.yaml",
     "CHANGELOG.md",
     "**/*.svg"
